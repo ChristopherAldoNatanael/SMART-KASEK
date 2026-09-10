@@ -9,7 +9,10 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 const optionalText = (max: number) =>
   z.preprocess(
-    (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+    (v) =>
+      v == null || (typeof v === "string" && v.trim() === "")
+        ? undefined
+        : v,
     z.string().trim().min(1).max(max).optional()
   );
 

@@ -277,8 +277,27 @@ export function LogoSizeForm({ school }: { school: School }) {
       action={formAction}
       className="flex flex-wrap items-end gap-3 border-t pt-4"
     >
-      {/* Pertahankan nama agar RPC tidak mengubahnya */}
+      {/* Kirim ulang seluruh nilai saat ini: RPC menulis semua kolom,
+          jadi field yang tak dikirim akan terhapus (NULL). */}
       <input type="hidden" name="name" value={school.name} />
+      <input type="hidden" name="npsn" value={school.npsn ?? ""} />
+      <input type="hidden" name="address" value={school.address ?? ""} />
+      <input type="hidden" name="village" value={school.village ?? ""} />
+      <input type="hidden" name="district" value={school.district ?? ""} />
+      <input type="hidden" name="city" value={school.city ?? ""} />
+      <input type="hidden" name="province" value={school.province ?? ""} />
+      <input type="hidden" name="phone" value={school.phone ?? ""} />
+      <input type="hidden" name="email" value={school.email ?? ""} />
+      <input
+        type="hidden"
+        name="principalName"
+        value={school.principal_name ?? ""}
+      />
+      <input
+        type="hidden"
+        name="principalNip"
+        value={school.principal_nip ?? ""}
+      />
       <div className="flex-1">
         <FormMessage error={state.error} ok={state.ok} />
         <Field

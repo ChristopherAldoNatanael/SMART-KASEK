@@ -7,7 +7,10 @@ import { z } from "zod";
 
 const optionalText = (max: number) =>
   z.preprocess(
-    (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+    (v) =>
+      v == null || (typeof v === "string" && v.trim() === "")
+        ? undefined
+        : v,
     z.string().trim().min(1).max(max).optional()
   );
 
@@ -28,7 +31,10 @@ export const updateSchoolSchema = z.object({
   principalName: optionalText(200),
   principalNip: optionalText(50),
   logoSize: z.preprocess(
-    (v) => (typeof v === "string" && v.trim() === "" ? undefined : Number(v)),
+    (v) =>
+      v == null || (typeof v === "string" && v.trim() === "")
+        ? undefined
+        : Number(v),
     z.number().int().min(24).max(64).optional()
   ),
 });
