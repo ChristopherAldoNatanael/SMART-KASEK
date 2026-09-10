@@ -1,0 +1,19 @@
+- Prefers Indonesian language communication. Confidence: 0.9
+- Prefers structured analysis deliverables with specific sections: Current State, Problems, Missing Pieces, Recommended Implementation Order. Confidence: 0.85
+- Iterative workflow: analyze first, wait for explicit approval before making changes. Confidence: 0.85
+- Prefers minimal/lean dependencies — explicitly says "no unnecessary dependencies" when scaffolding. Confidence: 0.75
+- Wants verification after implementation: run typecheck/lint/build and fix all errors before reporting done. Confidence: 0.8
+- Prefers structured implementation reporting with sections: Files created/changed, Packages added, Checks performed, Errors/issues remaining. Confidence: 0.8
+- No dummy/mock business data — explicitly forbids it in every implementation phase. Confidence: 0.9
+- No hardcoded IDs or hardcoded business values — stated as a rule in every implementation phase. Confidence: 0.9
+- Read specification files before implementing — always instructs agent to read AGENTS.md and SMART-KASEK.md first. Confidence: 0.85
+- Identify contradictions/ambiguities in specs instead of guessing — explicitly requested in Phase 2. Confidence: 0.75
+- For debugging: requires full investigation/trace of the issue (exact files, functions, conditions, chain) before implementing any fix — explicitly forbids assuming common causes like cookies, middleware, OAuth without evidence. Confidence: 0.95
+- Specific structured bug report format: ROOT CAUSE, REDIRECT/ISSUE CHAIN, FILES CHANGED, CHANGES, VERIFICATION, PRODUCTION RISK, REMAINING CONCERNS. Confidence: 0.9
+- Production safety: fixes must be verified safe for production deployment, not just localhost workarounds — audit environment-dependent behavior and deployment risks. Confidence: 0.9
+- Do not assume common quick-fix solutions (clear cookies, restart browser, disable middleware/auth, force localhost, hardcode paths, temporary exceptions) unless investigation proves they're part of the actual root cause. Confidence: 0.9
+- No weakening/bypassing RLS or insecure public access policies — explicit security rule for database work. Confidence: 0.85
+- Prefers not using Docker (at least for current project phase). Confidence: 0.7
+- Scope discipline: do not modify unrelated spec files, do not implement features ahead of the agreed phase. Confidence: 0.75
+- Concise reporting: provide only the requested structured sections, no unnecessary explanations or elaboration. Confidence: 0.8
+- Conservative database migrations: do not modify schema unless a migration error requires it; make the smallest safe change and explain it. Confidence: 0.8

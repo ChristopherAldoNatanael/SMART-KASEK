@@ -1,0 +1,351 @@
+"use server";
+
+import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/auth";
+import { requirePrincipal } from "@/lib/permissions";
+import type { Database } from "@/types/database";
+
+type Supervision = Database["public"]["Tables"]["supervisions"]["Row"];
+type SupervisionInsert = Database["public"]["Tables"]["supervisions"]["Insert"];
+type SupervisionUpdate = Database["public"]["Tables"]["supervisions"]["Update"];
+type SupervisionItem = Database["public"]["Tables"]["supervision_items"]["Row"];
+type SupervisionItemInsert =
+  Database["public"]["Tables"]["supervision_items"]["Insert"];
+
+export type SupervisionWithDetails = Supervision & {
+  teacher: { id: string; profile: { full_name: string | null } | null } | null;
+  supervisor: { id: string; full_name: string | null } | null;
+  items: SupervisionItem[];
+};
+
+/**
+ * Get all supervisions for the current user's school.
+ */
+export async function getSupervisions(): Promise<SupervisionWithDetails[]> {
+  const user = await getCurrentUser();
+  if (!user?.schoolId) return [];
+
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("supervisions")
+    .select(
+      `
+      *,
+      teacher:teachers(id, profile:profiles(full_name)),
+      supervisor:profiles(full_name),
+      items:supervision_items(*)
+    `
+    )
+    .eq("school_id", user.schoolId)
+    .order("supervision_date", { ascending: false });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data as SupervisionWithDetails[];
+}
+
+/**
+ * Get a single supervision by ID with all details.
+ */
+export async function getSupervisionById(
+  id: string
+): Promise<SupervisionWithDetails | null> {
+  const user = await getCurrentUser();
+  if (!user?.schoolId) return null;
+
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("supervisions")
+    .select(
+      `
+      *,
+      teacher:teachers(id, profile:profiles(full_name)),
+      supervisor:profiles(full_name),
+      items:supervision_items(*)
+    `
+    )
+    .eq("id", id)
+    .eq("school_id", user.schoolId)
+    .single();
+
+  if (error) {
+    if (error.code === "PGRST116") {
+      return null;
+    }
+    throw new Error(error.message);
+  }
+
+  return data as SupervisionWithDetails;
+}
+
+/**
+ * Get supervisions for a specific teacher.
+ */
+export async function getTeacherSupervisions(
+  teacherId: string
+): Promise<Supervision[]> {
+  const user = await getCurrentUser();
+  if (!user?.schoolId) throw new Error("No school access");
+
+  const supabase = await createClient();
+
+  // Verify teacher belongs to user's school
+  const { data: teacher } = await supabase
+    .from("teachers")
+    .select("id")
+    .eq("id", teacherId)
+    .eq("school_id", user.schoolId)
+    .single();
+
+  if (!teacher) {
+    throw new Error("Guru tidak ditemukan");
+  }
+
+  const { data, error } = await supabase
+    .from("supervisions")
+    .select("*")
+    .eq("teacher_id", teacherId)
+    .order("supervision_date", { ascending: false });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data;
+}
+
+/**
+ * Create a new supervision.
+ */
+export async function createSupervision(input: {
+  teacherId: string;
+  supervisionDate: string;
+  type?: string;
+  summary?: string;
+  strengths?: string;
+  improvements?: string;
+  status?: Database["public"]["Tables"]["supervisions"]["Row"]["status"];
+  items?: {
+    indicator: string;
+    category?: string;
+    score?: number;
+    observation?: string;
+    recommendation?: string;
+  }[];
+}): Promise<Supervision> {
+  const user = await getCurrentUser();
+  if (!user?.schoolId) throw new Error("No school access");
+
+  const supabase = await createClient();
+
+  // Verify teacher belongs to user's school
+  const { data: teacher } = await supabase
+    .from("teachers")
+    .select("id")
+    .eq("id", input.teacherId)
+    .eq("school_id", user.schoolId)
+    .single();
+
+  if (!teacher) {
+    throw new Error("Guru tidak ditemukan");
+  }
+
+  // Calculate overall score from items if provided
+  let overallScore: number | null = null;
+  if (input.items && input.items.length > 0) {
+    const scores = input.items
+      .map((item) => item.score)
+      .filter((score): score is number => score !== undefined);
+    if (scores.length > 0) {
+      overallScore =
+        Math.round(
+          (scores.reduce((a, b) => a + b, 0) / scores.length) * 100
+        ) / 100;
+    }
+  }
+
+  const supervisionData: SupervisionInsert = {
+    school_id: user.schoolId,
+    teacher_id: input.teacherId,
+    supervisor_id: user.id,
+    supervision_date: input.supervisionDate,
+    type: input.type || null,
+    overall_score: overallScore,
+    summary: input.summary || null,
+    strengths: input.strengths || null,
+    improvements: input.improvements || null,
+    status: input.status || "draft",
+  };
+
+  const { data, error } = await supabase
+    .from("supervisions")
+    .insert(supervisionData)
+    .select()
+    .single();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  // Insert supervision items if provided
+  if (input.items && input.items.length > 0) {
+    const itemsData: SupervisionItemInsert[] = input.items.map((item) => ({
+      supervision_id: data.id,
+      indicator: item.indicator,
+      category: item.category || null,
+      score: item.score || null,
+      observation: item.observation || null,
+      recommendation: item.recommendation || null,
+    }));
+
+    const { error: itemsError } = await supabase
+      .from("supervision_items")
+      .insert(itemsData);
+
+    if (itemsError) {
+      throw new Error(`Gagal menambahkan item: ${itemsError.message}`);
+    }
+  }
+
+  return data;
+}
+
+/**
+ * Update a supervision.
+ */
+export async function updateSupervision(
+  id: string,
+  input: {
+    supervisionDate?: string;
+    type?: string;
+    overallScore?: number;
+    summary?: string;
+    strengths?: string;
+    improvements?: string;
+    status?: Database["public"]["Tables"]["supervisions"]["Row"]["status"];
+  }
+): Promise<Supervision> {
+  const user = await getCurrentUser();
+  if (!user?.schoolId) throw new Error("No school access");
+
+  const supabase = await createClient();
+
+  const supervision = await getSupervisionById(id);
+  if (!supervision) {
+    throw new Error("Supervisi tidak ditemukan");
+  }
+
+  const updateData: SupervisionUpdate = {};
+  if (input.supervisionDate !== undefined)
+    updateData.supervision_date = input.supervisionDate;
+  if (input.type !== undefined) updateData.type = input.type;
+  if (input.overallScore !== undefined)
+    updateData.overall_score = input.overallScore;
+  if (input.summary !== undefined) updateData.summary = input.summary;
+  if (input.strengths !== undefined) updateData.strengths = input.strengths;
+  if (input.improvements !== undefined)
+    updateData.improvements = input.improvements;
+  if (input.status !== undefined) updateData.status = input.status;
+
+  const { data, error } = await supabase
+    .from("supervisions")
+    .update(updateData)
+    .eq("id", id)
+    .eq("school_id", user.schoolId)
+    .select()
+    .single();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data;
+}
+
+/**
+ * Delete a supervision.
+ * Requires principal role (legacy admin accepted for compatibility).
+ */
+export async function deleteSupervision(id: string): Promise<void> {
+  const user = await requirePrincipal();
+  if (!user?.schoolId) throw new Error("No school access");
+
+  const supabase = await createClient();
+
+  const supervision = await getSupervisionById(id);
+  if (!supervision) {
+    throw new Error("Supervisi tidak ditemukan");
+  }
+
+  const { error } = await supabase
+    .from("supervisions")
+    .delete()
+    .eq("id", id)
+    .eq("school_id", user.schoolId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
+/**
+ * Get supervision statistics for the school.
+ */
+export async function getSupervisionStats(): Promise<{
+  total: number;
+  draft: number;
+  completed: number;
+  followUp: number;
+  closed: number;
+  averageScore: number | null;
+}> {
+  const user = await getCurrentUser();
+  if (!user?.schoolId) {
+    return { total: 0, draft: 0, completed: 0, followUp: 0, closed: 0, averageScore: null };
+  }
+
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("supervisions")
+    .select("status, overall_score")
+    .eq("school_id", user.schoolId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const stats = {
+    total: data.length,
+    draft: 0,
+    completed: 0,
+    followUp: 0,
+    closed: 0,
+    averageScore: null as number | null,
+  };
+
+  const scores: number[] = [];
+
+  for (const item of data) {
+    if (item.status === "draft") stats.draft++;
+    if (item.status === "completed") stats.completed++;
+    if (item.status === "follow_up") stats.followUp++;
+    if (item.status === "closed") stats.closed++;
+
+    if (item.overall_score !== null) {
+      scores.push(item.overall_score);
+    }
+  }
+
+  if (scores.length > 0) {
+    stats.averageScore =
+      Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 100) /
+      100;
+  }
+
+  return stats;
+}

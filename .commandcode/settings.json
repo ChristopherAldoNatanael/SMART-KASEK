@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Shell(npm:*)",
+      "Shell(npx tsc --noEmit)",
+      "Shell(dir:*)",
+      "Shell(findstr:*)",
+      "Shell(rmdir:*)",
+      "Shell(del:*)",
+      "powershell",
+      "Shell(if:*)",
+      "Shell(dir node_modules 2>nul && echo exists || echo deleted)",
+      "Shell(cmd:*)"
+    ],
+    "deny": [],
+    "defaultMode": "default"
+  }
+}
