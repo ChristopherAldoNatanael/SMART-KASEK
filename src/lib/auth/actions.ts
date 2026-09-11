@@ -22,15 +22,23 @@ export async function login(
     return { error: "Email dan password wajib diisi" };
   }
 
-  const supabase = await createClient();
+  try {
+    const supabase = await createClient();
 
-  const { error } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  });
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
 
-  if (error) {
-    return { error: "Email atau password salah" };
+    if (error) {
+      return { error: "Email atau password salah" };
+    }
+  } catch (err) {
+    console.error("login error:", err);
+    return {
+      error:
+        "Tidak dapat menghubungi server login. Periksa koneksi, lalu coba lagi.",
+    };
   }
 
   redirect("/dashboard");
@@ -66,18 +74,27 @@ export async function signup(
   const supabase = await createClient();
 
   // Create auth user
-  const { data: authData, error: authError } = await supabase.auth.signUp({
-    email,
-    password,
-    options: {
-      data: {
-        full_name: fullName,
+  let authData;
+  try {
+    const result = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          full_name: fullName,
+        },
       },
-    },
-  });
-
-  if (authError) {
-    return { error: authError.message };
+    });
+    if (result.error) {
+      return { error: result.error.message };
+    }
+    authData = result.data;
+  } catch (error) {
+    console.error("signup error:", error);
+    return {
+      error:
+        "Tidak dapat menghubungi server. Periksa koneksi, lalu coba lagi.",
+    };
   }
 
   if (!authData.user) {

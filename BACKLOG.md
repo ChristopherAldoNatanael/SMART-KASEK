@@ -113,11 +113,20 @@ Format status: `[ ]` belum dikerjakan · `[x]` selesai · `(ronde-N)` kapan sele
       STATUS 200 + JSON valid via probe langsung (file probe dihapus).
       Preset `.env.example` diperbarui. Perlu restart dev server agar model
       baru terbaca.
-- [x] (ronde-24) AI fallback + Kelola AI: tabel `ai_provider_configs`
-      (migrasi `00009`, RLS principal-only), chain prioritas
-      (DB → env → error jujur) dipakai semua fitur AI, halaman
-      `/settings/ai` (tambah/nonaktif/hapus/tes koneksi, key hanya tampil
-      4 digit akhir). Key chat TIDAK disimpan ke file mana pun.
+- [x] (ronde-24, DIBATALKAN ronde-31) AI fallback + Kelola AI — seluruh
+      lapis AI dihapus (lihat ronde-31). Key chat tidak pernah tersimpan
+      di file mana pun. Migrasi `00009` tidak perlu dijalankan.
+- [x] (ronde-31) Hapus total AI: routes `/ai/*` + `/settings/ai`, sidebar
+      grup Kecerdasan, `lib/ai/*`, `lib/early-warning`, `ai.service`,
+      `ai-config.service`, `warning.service`, skema AI, komponen AI/warning.
+      Dashboard tanpa kartu/peringatan AI (diganti Coaching & Growth).
+      Tabel DB AI (`ai_*`, `early_warnings`) DIBIARKAN (tak merusak data).
+      `.env.example` bersih dari AI_*. Dokumen AGENTS.md/SMART-KASEK.md
+      tidak diubah (keputusan narasi milik Anda).
+- [x] (ronde-32) Sidebar premium: ikon dalam tile, indikator bar aktif,
+      grup Dashboard/Kelola/Sistem, kartu identitas sekolah berbingkai,
+      footer ramping, focus-ring aksesibel. API/props tak berubah
+      (mobile drawer + role utuh).
 - [x] (ronde-25) Upload dokumen modul ajar: bucket privat `lesson-docs`
       (migrasi `00010` + policies sekolah/pemilik), unggah langsung
       browser→Storage (byte tak lewat server), baca via signed URL/jam,
@@ -133,6 +142,13 @@ Format status: `[ ]` belum dikerjakan · `[x]` selesai · `(ronde-N)` kapan sele
 - [x] (ronde-28) Persentase pengumpulan: `getLessonSubmissionStats` (guru
       dengan ≥1 modul Dipublikasikan / total guru) + progress bar di /learning.
       Input mandiri guru sudah ada sejak ronde-9; persen ini yang belum ada.
+- [x] (ronde-29) Production hardening login: `login`/`signup` dibungkus
+      try/catch (env hilang/network → pesan ramah, bukan digest 500);
+      `GoogleButton` deteksi konfigurasi tak lengkap. Akar 3 gejala Vercel =
+      env vars belum disetel di dashboard Vercel (wajib Redeploy).
+- [x] (ronde-30) Skrip `scripts/push-env.ps1`: upload semua env sekaligus
+      (timpa yang ada, sintaks terverifikasi). Butuh `vercel login` + `link`
+      interaktif sekali, lalu Redeploy tanpa cache.
 - [x] (ronde-16) Callback pintar + NIP: `/auth/callback` cek profil — belum
       ada data → `/onboarding`, lengkap → tujuan semula/dashboard. NIP masuk
       form gabung (migrasi `00007`, `join_school` 4-param + drop signature lama)

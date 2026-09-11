@@ -1,15 +1,11 @@
 import {
-  BarChart3,
   BookOpenText,
-  Bot,
   ClipboardList,
   FolderKanban,
   LayoutDashboard,
   MessagesSquare,
   School,
   Settings,
-  Siren,
-  Sparkles,
   TrendingUp,
   UserRound,
   Users,
@@ -34,17 +30,13 @@ const PRINCIPAL_NAV: NavItem[] = [
   { href: "/learning", label: "Pembelajaran", icon: BookOpenText },
   { href: "/students", label: "Kesiswaan", icon: School },
   { href: "/administration", label: "Administrasi", icon: FolderKanban },
-  { href: "/ai/coach", label: "AI Coach", icon: Bot },
-  { href: "/ai/insight", label: "School Insight", icon: BarChart3 },
-  { href: "/ai/early-warning", label: "Early Warning", icon: Siren },
-  { href: "/ai/assistant", label: "AI Assistant", icon: Sparkles },
   { href: "/settings", label: "Pengaturan", icon: Settings },
 ];
 
 /**
  * Teacher menu: only pages a teacher can actually open today.
- * /growth and /ai/* require principal server-side, so they are
- * intentionally excluded until teacher-scoped access lands (BACKLOG).
+ * /growth requires principal server-side, so it is intentionally
+ * excluded until teacher-scoped access lands (BACKLOG).
  */
 const TEACHER_NAV: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },

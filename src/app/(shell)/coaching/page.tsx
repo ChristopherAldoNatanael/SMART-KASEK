@@ -75,7 +75,7 @@ export default async function CoachingPage() {
         <Empty
           icon={MessagesSquare}
           title="Belum ada sesi coaching"
-          description="Buat sesi coaching dari temuan supervisi atau rekomendasi AI Coach."
+          description="Buat sesi coaching dari temuan supervisi atau kebutuhan guru."
           actionHref="/coaching/new"
           actionLabel="Tambah Sesi"
         />

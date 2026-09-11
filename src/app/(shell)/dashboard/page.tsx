@@ -5,6 +5,7 @@ import {
   ArrowRight,
   ClipboardCheck,
   LineChart,
+  MessagesSquare,
   Users,
 } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth";
@@ -16,7 +17,6 @@ import {
 import { getSchoolGrowthOverview } from "@/services/growth.service";
 import { getCoachingStats } from "@/services/coaching.service";
 import { getSupervisionStats } from "@/services/supervision.service";
-import { getActiveWarnings } from "@/services/warning.service";
 import { Empty, PageHeader, Panel, Stat } from "@/components/common";
 import InviteCodeCard from "@/components/school/invite-code-card";
 
@@ -125,17 +125,16 @@ export default async function DashboardPage() {
     overdueActions: number;
     supervisionCompleted: number;
     supervisionTotal: number;
-    activeWarnings: number;
+    coachingTotal: number;
   } | null = null;
   let inviteCode: string | null = null;
   let loadError: string | null = null;
 
   try {
-    const [overview, coaching, supervision, warnings, code] = await Promise.all([
+    const [overview, coaching, supervision, code] = await Promise.all([
       getSchoolGrowthOverview(),
       getCoachingStats(),
       getSupervisionStats(),
-      getActiveWarnings(),
       getMySchoolInviteCode(),
     ]);
     stats = {
@@ -147,7 +146,7 @@ export default async function DashboardPage() {
       overdueActions: coaching.overdueActions,
       supervisionCompleted: supervision.completed,
       supervisionTotal: supervision.total,
-      activeWarnings: warnings.length,
+      coachingTotal: coaching.totalSessions,
     };
     inviteCode = code;
   } catch (error) {
@@ -208,34 +207,37 @@ export default async function DashboardPage() {
               tone={stats.overdueActions > 0 ? "danger" : "default"}
             />
             <Stat
-              icon={AlertTriangle}
-              label="Peringatan Aktif"
-              value={stats.activeWarnings}
+              icon={MessagesSquare}
+              label="Sesi Coaching"
+              value={stats.coachingTotal}
               sub={`Supervisi selesai ${stats.supervisionCompleted}/${stats.supervisionTotal}`}
-              tone={stats.activeWarnings > 0 ? "danger" : "default"}
             />
           </div>
 
           <div className="grid gap-4 lg:grid-cols-3">
             <div className="space-y-4 lg:col-span-2">
               <Shortcut
-                href="/ai/early-warning"
-                title="Early Warning"
-                description={
-                  stats.activeWarnings === 0
-                    ? "Tidak ada peringatan aktif."
-                    : `${stats.activeWarnings} peringatan perlu perhatian.`
-                }
-              />
-              <Shortcut
-                href="/ai/insight"
-                title="School Insight"
-                description="Analisis kondisi sekolah berbasis data."
-              />
-              <Shortcut
                 href="/supervision"
                 title="Supervisi"
                 description={`${stats.supervisionCompleted} dari ${stats.supervisionTotal} supervisi selesai.`}
+              />
+              <Shortcut
+                href="/coaching"
+                title="Coaching"
+                description={
+                  stats.pendingCoaching === 0
+                    ? "Tidak ada tindak lanjut menunggu."
+                    : `${stats.pendingCoaching} tindak lanjut menunggu penyelesaian.`
+                }
+              />
+              <Shortcut
+                href="/growth"
+                title="Teacher Growth"
+                description={
+                  stats.averageGrowth !== null
+                    ? `Rata-rata sekolah ${stats.averageGrowth} — ${stats.positiveGrowth} guru tumbuh positif.`
+                    : "Belum ada data perkembangan."
+                }
               />
             </div>
             <InviteCodeCard code={inviteCode} />

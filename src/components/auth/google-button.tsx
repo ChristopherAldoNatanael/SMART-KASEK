@@ -21,6 +21,12 @@ export default function GoogleButton({
     setPending(true);
     setError(null);
     try {
+      if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+        setError(
+          "Konfigurasi aplikasi belum lengkap di server. Hubungi administrator sistem."
+        );
+        return;
+      }
       const supabase = createClient();
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
