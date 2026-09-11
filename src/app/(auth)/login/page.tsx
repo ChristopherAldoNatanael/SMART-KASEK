@@ -1,8 +1,24 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { GraduationCap } from "lucide-react";
 import { login } from "@/lib/auth/actions";
+import GoogleButton from "@/components/auth/google-button";
+
+function OAuthError() {
+  const params = useSearchParams();
+  if (params.get("error") !== "oauth") return null;
+  return (
+    <div
+      role="alert"
+      className="rounded-md border border-destructive/20 bg-destructive/5 p-3 text-sm text-destructive"
+    >
+      Login Google gagal. Pastikan akun Google Anda diizinkan lalu coba lagi.
+    </div>
+  );
+}
 
 export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
@@ -35,6 +51,17 @@ export default function LoginPage() {
           action={handleSubmit}
           className="space-y-4 rounded-xl border bg-card p-6 shadow-[0_1px_2px_rgba(16,24,40,0.06)]"
         >
+          <GoogleButton mode="login" />
+
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            <span className="h-px flex-1 bg-border" />
+            atau masuk dengan email
+            <span className="h-px flex-1 bg-border" />
+          </div>
+
+          <Suspense>
+            <OAuthError />
+          </Suspense>
           <div className="space-y-2">
             <label htmlFor="email" className="text-sm font-medium">
               Email
@@ -85,6 +112,15 @@ export default function LoginPage() {
         <p className="text-center text-xs text-muted-foreground">
           Akun dibuat oleh Kepala Sekolah • Minta kode undangan bila belum
           terhubung
+        </p>
+        <p className="text-center text-sm text-muted-foreground">
+          Belum punya akun?{" "}
+          <Link
+            href="/register"
+            className="font-medium text-brand hover:underline"
+          >
+            Daftar
+          </Link>
         </p>
       </div>
     </main>

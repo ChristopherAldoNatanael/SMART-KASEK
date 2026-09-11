@@ -34,6 +34,7 @@ export default async function TeachersPage() {
           <TableHead>
             <Th>Nama</Th>
             <Th>Mata Pelajaran</Th>
+            <Th>Wali Kelas</Th>
             <Th>NIP</Th>
             <Th>Status</Th>
             <Th className="text-right">Aksi</Th>
@@ -54,6 +55,13 @@ export default async function TeachersPage() {
                 </td>
                 <td className="px-4 py-3 text-muted-foreground">
                   {teacher.subject ?? "—"}
+                </td>
+                <td className="px-4 py-3">
+                  {teacher.homeroom_class ? (
+                    <Badge tone="brand">{teacher.homeroom_class}</Badge>
+                  ) : (
+                    <span className="text-sm text-muted-foreground">—</span>
+                  )}
                 </td>
                 <td className="tnum px-4 py-3 text-muted-foreground">
                   {teacher.nip ?? "—"}

@@ -144,8 +144,9 @@ export async function updateTeacher(
   input: {
     fullName?: string;
     employeeNumber?: string;
-    nip?: string;
-    subject?: string;
+    nip?: string | null;
+    subject?: string | null;
+    homeroomClass?: string | null;
     department?: string;
     educationLevel?: string;
     employmentStatus?: string;
@@ -166,7 +167,10 @@ export async function updateTeacher(
   if (input.employeeNumber !== undefined)
     updateData.employee_number = input.employeeNumber;
   if (input.nip !== undefined) updateData.nip = input.nip;
-  if (input.subject !== undefined) updateData.subject = input.subject;
+  if (input.subject !== undefined)
+    updateData.subject = input.subject || null;
+  if (input.homeroomClass !== undefined)
+    updateData.homeroom_class = input.homeroomClass || null;
   if (input.department !== undefined) updateData.department = input.department;
   if (input.educationLevel !== undefined)
     updateData.education_level = input.educationLevel;

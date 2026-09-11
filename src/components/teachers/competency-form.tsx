@@ -1,7 +1,10 @@
 "use client";
 
 import { useFormState, useFormStatus } from "react-dom";
-import { saveCompetencyAction } from "@/app/(shell)/teachers/actions";
+import {
+  saveCompetencyAction,
+  updateTeachingAction,
+} from "@/app/(shell)/teachers/actions";
 
 export type CompetencyOption = {
   id: string;
@@ -22,7 +25,13 @@ const SOURCE_LABELS: Record<string, string> = {
   ai: "AI",
 };
 
-function SubmitButton() {
+function SubmitButton({
+  label = "Simpan Nilai",
+  pendingLabel = "Menyimpan…",
+}: {
+  label?: string;
+  pendingLabel?: string;
+}) {
   const { pending } = useFormStatus();
   return (
     <button
@@ -30,9 +39,33 @@ function SubmitButton() {
       disabled={pending}
       className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50"
     >
-      {pending ? "Menyimpan…" : "Simpan Nilai"}
+      {pending ? pendingLabel : label}
     </button>
   );
+}
+
+function StateMessage({ error, ok }: { error: string | null; ok: boolean }) {
+  if (error) {
+    return (
+      <div
+        role="alert"
+        className="rounded-md border border-destructive/20 bg-destructive/5 p-3 text-sm text-destructive"
+      >
+        {error}
+      </div>
+    );
+  }
+  if (ok) {
+    return (
+      <div
+        role="status"
+        className="rounded-md bg-emerald-700/10 p-3 text-sm text-emerald-800"
+      >
+        Berhasil disimpan.
+      </div>
+    );
+  }
+  return null;
 }
 
 export default function CompetencyForm({
@@ -41,8 +74,7 @@ export default function CompetencyForm({
 }: {
   teacherId: string;
   competencies: CompetencyOption[];
-}) {
-  const [state, formAction] = useFormState(saveCompetencyAction, {
+}) {  const [state, formAction] = useFormState(saveCompetencyAction, {
     ok: false,
     error: null,
   });
@@ -109,6 +141,91 @@ export default function CompetencyForm({
         </div>
       </div>
       <SubmitButton />
+    </form>
+  );
+}
+
+/**
+ * Edit teaching assignment: subject + homeroom class.
+ * Empty homeroom clears the Wali Kelas status (same teachers row).
+ */
+export function TeachingForm({
+  teacherId,
+  subject,
+  homeroomClass,
+  nip,
+}: {
+  teacherId: string;
+  subject: string | null;
+  homeroomClass: string | null;
+  nip: string | null;
+}) {
+  const [state, formAction] = useFormState(updateTeachingAction, {
+    ok: false,
+    error: null,
+  });
+
+  return (
+    <form action={formAction} className="space-y-3">
+      <input type="hidden" name="teacherId" value={teacherId} />
+      <StateMessage error={state.error} ok={state.ok} />
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="space-y-1.5">
+          <label
+            htmlFor="teaching-subject"
+            className="text-xs font-medium text-muted-foreground"
+          >
+            Mata Pelajaran
+          </label>
+          <input
+            id="teaching-subject"
+            name="subject"
+            type="text"
+            maxLength={100}
+            defaultValue={subject ?? ""}
+            placeholder="mis. Matematika"
+            className={inputClass}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <label
+            htmlFor="teaching-nip"
+            className="text-xs font-medium text-muted-foreground"
+          >
+            NIP
+          </label>
+          <input
+            id="teaching-nip"
+            name="nip"
+            type="text"
+            maxLength={50}
+            defaultValue={nip ?? ""}
+            placeholder="mis. 198501012010011001"
+            className={inputClass}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <label
+            htmlFor="teaching-homeroom"
+            className="text-xs font-medium text-muted-foreground"
+          >
+            Wali Kelas
+          </label>
+          <input
+            id="teaching-homeroom"
+            name="homeroomClass"
+            type="text"
+            maxLength={50}
+            defaultValue={homeroomClass ?? ""}
+            placeholder="mis. VII-A — kosongkan bila bukan"
+            className={inputClass}
+          />
+        </div>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Kosongkan kolom Wali Kelas untuk menonaktifkan statusnya.
+      </p>
+      <SubmitButton label="Simpan Perubahan" pendingLabel="Menyimpan…" />
     </form>
   );
 }

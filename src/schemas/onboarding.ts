@@ -32,6 +32,27 @@ export const joinSchoolSchema = z.object({
     .min(4, "Kode undangan tidak valid")
     .max(20, "Kode undangan tidak valid")
     .transform((v) => v.toUpperCase()),
+  subject: z.preprocess(
+    (v) =>
+      v == null || (typeof v === "string" && v.trim() === "")
+        ? undefined
+        : v,
+    z.string().trim().min(1).max(100).optional()
+  ),
+  homeroomClass: z.preprocess(
+    (v) =>
+      v == null || (typeof v === "string" && v.trim() === "")
+        ? undefined
+        : v,
+    z.string().trim().min(1).max(50).optional()
+  ),
+  nip: z.preprocess(
+    (v) =>
+      v == null || (typeof v === "string" && v.trim() === "")
+        ? undefined
+        : v,
+    z.string().trim().min(1).max(50).optional()
+  ),
 });
 
 export function firstIssueMessage(error: z.ZodError): string {

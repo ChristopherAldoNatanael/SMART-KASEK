@@ -2,10 +2,13 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { ensureProfile } from "@/services/school.service";
 
 export type AuthState = {
   error?: string;
   success?: boolean;
+  /** True bila akun dibuat tetapi email belum dikonfirmasi. */
+  needsConfirmation?: boolean;
 };
 
 export async function login(
@@ -43,18 +46,21 @@ export async function signup(
   _prevState: AuthState | undefined,
   formData: FormData
 ): Promise<AuthState> {
-  const email = formData.get("email") as string;
+  const email = (formData.get("email") as string)?.trim();
   const password = formData.get("password") as string;
-  const fullName = formData.get("fullName") as string;
-  const schoolId = formData.get("schoolId") as string;
+  const fullName = (formData.get("fullName") as string)?.trim();
   const role = formData.get("role") as string;
 
   if (!email || !password || !fullName) {
-    return { error: "Semua field wajib diisi" };
+    return { error: "Nama, email, dan password wajib diisi" };
   }
 
   if (password.length < 6) {
     return { error: "Password minimal 6 karakter" };
+  }
+
+  if (role !== "principal" && role !== "teacher") {
+    return { error: "Pilih peran: Guru atau Kepala Sekolah" };
   }
 
   const supabase = await createClient();
@@ -78,18 +84,24 @@ export async function signup(
     return { error: "Gagal membuat akun" };
   }
 
-  // Create profile
-  const { error: profileError } = await supabase.from("profiles").insert({
-    auth_user_id: authData.user.id,
-    school_id: schoolId || null,
-    full_name: fullName,
-    email,
-    role: role || "teacher",
-  });
-
-  if (profileError) {
-    return { error: "Gagal membuat profil pengguna" };
+  // Langsung login (konfirmasi email nonaktif di Supabase) → buat profil
+  // via RPC (RLS memblokir insert profil langsung). Profil baru pasti
+  // belum bersekolah → langsung ke onboarding (tanpa mampir dashboard
+  // agar tidak ada kedipan redirect ganda).
+  if (authData.session) {
+    try {
+      await ensureProfile(role);
+    } catch (error) {
+      console.error("signup ensureProfile error:", error);
+      return {
+        error:
+          error instanceof Error ? error.message : "Gagal membuat profil",
+      };
+    }
+    redirect("/onboarding");
   }
 
-  return { success: true };
+  // Konfirmasi email aktif → user klik tautan email, lalu memilih peran
+  // di halaman onboarding (ensure_profile di sana).
+  return { success: true, needsConfirmation: true };
 }

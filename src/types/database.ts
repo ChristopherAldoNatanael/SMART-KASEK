@@ -151,6 +151,7 @@ export interface Database {
           employee_number: string | null;
           nip: string | null;
           subject: string | null;
+          homeroom_class: string | null;
           department: string | null;
           education_level: string | null;
           employment_status: string;
@@ -165,6 +166,7 @@ export interface Database {
           employee_number?: string | null;
           nip?: string | null;
           subject?: string | null;
+          homeroom_class?: string | null;
           department?: string | null;
           education_level?: string | null;
           employment_status?: string;
@@ -179,6 +181,7 @@ export interface Database {
           employee_number?: string | null;
           nip?: string | null;
           subject?: string | null;
+          homeroom_class?: string | null;
           department?: string | null;
           education_level?: string | null;
           employment_status?: string;

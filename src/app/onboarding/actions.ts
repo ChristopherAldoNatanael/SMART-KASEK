@@ -38,8 +38,10 @@ export async function chooseRoleAction(
     };
   }
 
-  revalidatePath("/dashboard");
-  redirect("/dashboard");
+  // Profil baru pasti belum bersekolah → kembali ke onboarding untuk
+  // langkah berikutnya (tanpa mampir dashboard agar tak ada kedipan).
+  revalidatePath("/onboarding");
+  redirect("/onboarding");
 }
 
 export async function createSchoolAction(
@@ -81,13 +83,23 @@ export async function joinSchoolAction(
   _prev: OnboardingActionState,
   formData: FormData
 ): Promise<OnboardingActionState> {
-  const parsed = joinSchoolSchema.safeParse({ code: formData.get("code") });
+  const parsed = joinSchoolSchema.safeParse({
+    code: formData.get("code"),
+    subject: formData.get("subject"),
+    homeroomClass: formData.get("homeroomClass"),
+    nip: formData.get("nip"),
+  });
   if (!parsed.success) {
     return { ok: false, error: firstIssueMessage(parsed.error) };
   }
 
   try {
-    await joinSchool(parsed.data.code);
+    await joinSchool({
+      code: parsed.data.code,
+      subject: parsed.data.subject,
+      homeroomClass: parsed.data.homeroomClass,
+      nip: parsed.data.nip,
+    });
   } catch (error) {
     console.error("joinSchoolAction error:", error);
     return {

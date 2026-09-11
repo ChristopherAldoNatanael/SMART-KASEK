@@ -160,11 +160,19 @@ export async function createSchool(input: {
   return data as SchoolWithInvite;
 }
 
-export async function joinSchool(
-  code: string
-): Promise<SchoolWithInvite> {
+export async function joinSchool(input: {
+  code: string;
+  subject?: string;
+  homeroomClass?: string;
+  nip?: string;
+}): Promise<SchoolWithInvite> {
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc("join_school", { p_code: code });
+  const { data, error } = await supabase.rpc("join_school", {
+    p_code: input.code,
+    p_subject: input.subject || null,
+    p_homeroom_class: input.homeroomClass || null,
+    p_nip: input.nip || null,
+  });
   if (error) throw new Error(rpcErrorMessage(error));
   return data as SchoolWithInvite;
 }

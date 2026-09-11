@@ -88,6 +88,19 @@ Halaman masih placeholder "Modul ini akan segera tersedia":
 - [ ] `signup` (`src/lib/auth/actions.ts:42`) tidak punya halaman UI dan insert
       profil tanpa sekolah lewat anon client (terblokir RLS `profiles_insert`).
       Putuskan: hapus, atau hubungkan ke flow `/onboarding`.
+      → SELESAI ronde-15: halaman `/register` + `signup` ditulis ulang memakai
+      RPC `ensure_profile` (lolos RLS) + pilihan peran Guru/Kepala Sekolah.
+- [x] (ronde-15) Google OAuth: tombol Google di login & register
+      (`GoogleButton`), callback `/auth/callback?next=` + middleware public
+      routes. Akun baru (email maupun Google) bermuara ke `/onboarding` bila
+      profil belum ada. PRASYARAT DASHBOARD (tidak bisa dari kode): di Supabase
+      → Authentication → Sign in / Providers → Google Enabled, dan URL config
+      mencakup `http://localhost:3000/auth/callback` (dev) + domain produksi
+      + `/auth/callback`.
+- [x] (ronde-16) Callback pintar + NIP: `/auth/callback` cek profil — belum
+      ada data → `/onboarding`, lengkap → tujuan semula/dashboard. NIP masuk
+      form gabung (migrasi `00007`, `join_school` 4-param + drop signature lama)
+      dan form Penugasan di profil guru. Skema DB vs tipe TS disinkronkan.
 - [x] (ronde-8) UI kode undangan: kartu "Kode Undangan Sekolah" + tombol
       Salin di dashboard Kepala Sekolah (`InviteCodeCard`). `getMySchoolInviteCode`
       dibuat tahan-gagal bila migrasi 00003 belum diterapkan (return null +
@@ -119,6 +132,17 @@ Halaman masih placeholder "Modul ini akan segera tersedia":
       nama sekolah; guru otomatis mengikuti sekolahnya. Migrasi `00005`.
 - [ ] Regenerate kode undangan belum ada (lihat+salin sudah ada ronde-8).
 - [x] (ronde-13) Audit dummy total: semua link exiting route; tombol Hapus
+      Supervisi/Coaching (konfirmasi + redirect, service sudah terkunci
+      principal); **input nilai kompetensi** di profil guru (dropdown master +
+      skor + sumber → upsert + growth recalc + audit). Modul guru/detail tetap
+      tanpa tambah/edit/hapus data guru (createTeacher rusak — item di bawah);
+      guru baru masuk via alur undangan `/onboarding`.
+- [x] (ronde-14) Wali Kelas + audit persistence: `teachers.homeroom_class`
+      nullable (migrasi `00006`, tanpa tabel relasi — tidak ada master kelas),
+      opsional di form gabung + panel Penugasan di profil guru (kosongkan =
+      nonaktif). Onboarding diaudit: server-render dari DB per load, tanpa
+      localStorage/autosave/useEffect; completion = turunan `school_id`;
+      satu-satunya pola overwrite (form parsial) sudah dibayar lunas.
       Supervisi/Coaching (konfirmasi + redirect, service sudah terkunci
       principal); **input nilai kompetensi** di profil guru (dropdown master +
       skor + sumber → upsert + growth recalc + audit). Modul guru/detail tetap

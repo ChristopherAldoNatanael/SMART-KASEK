@@ -10,7 +10,7 @@ import {
   calculateGrowthPercentage,
 } from "@/services/growth.service";
 import { Badge, PageHeader, Panel } from "@/components/common";
-import CompetencyForm from "@/components/teachers/competency-form";
+import CompetencyForm, { TeachingForm } from "@/components/teachers/competency-form";
 
 const DIMENSIONS = [
   { label: "Pedagogik", key: "pedagogic_score" },
@@ -58,13 +58,47 @@ export default async function TeacherDetailPage({
       <PageHeader
         eyebrow={teacher.subject ?? "Guru"}
         title={teacher.profile?.full_name ?? "Tanpa nama"}
-        description={`NIP ${teacher.nip ?? "—"} • NUPTK ${teacher.employee_number ?? "—"}`}
+        description={`NIP ${teacher.nip ?? "—"} • NUPTK ${teacher.employee_number ?? "—"}${teacher.homeroom_class ? ` • Wali Kelas ${teacher.homeroom_class}` : ""}`}
         actions={
           <Badge tone={teacher.profile?.is_active ? "success" : "neutral"}>
             {teacher.profile?.is_active ? "Aktif" : "Nonaktif"}
           </Badge>
         }
       />
+
+      <Panel
+        title="Penugasan Mengajar"
+        description="Mata pelajaran dan status Wali Kelas — satu sumber data dengan tabel guru"
+        action={
+          teacher.homeroom_class ? (
+            <Badge tone="brand">Wali Kelas {teacher.homeroom_class}</Badge>
+          ) : (
+            <Badge tone="neutral">Bukan Wali Kelas</Badge>
+          )
+        }
+      >
+        {canScore ? (
+          <TeachingForm
+            teacherId={id}
+            subject={teacher.subject}
+            homeroomClass={teacher.homeroom_class}
+            nip={teacher.nip}
+          />
+        ) : (
+          <dl className="grid gap-3 text-sm sm:grid-cols-2">
+            <div>
+              <dt className="text-xs text-muted-foreground">Mata Pelajaran</dt>
+              <dd className="mt-0.5 font-medium">{teacher.subject ?? "—"}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted-foreground">Wali Kelas</dt>
+              <dd className="mt-0.5 font-medium">
+                {teacher.homeroom_class ?? "—"}
+              </dd>
+            </div>
+          </dl>
+        )}
+      </Panel>
 
       <Panel
         title="Profil Perkembangan"
@@ -145,8 +179,7 @@ export default async function TeacherDetailPage({
       <Panel
         title="Kompetensi Terkini"
         description="Skor terakhir per kompetensi dari berbagai sumber penilaian"
-      >
-        {competencySummary.length > 0 ? (
+      >        {competencySummary.length > 0 ? (
           <ul className="divide-y">
             {competencySummary.map((item) => (
               <li

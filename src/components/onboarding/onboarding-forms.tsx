@@ -184,6 +184,47 @@ export function JoinSchoolForm() {
           Minta kode undangan kepada Kepala Sekolah Anda.
         </p>
       </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <label htmlFor="join-subject" className="text-sm font-medium">
+            Mata Pelajaran <span className="font-normal text-muted-foreground">(opsional)</span>
+          </label>
+          <input
+            id="join-subject"
+            name="subject"
+            type="text"
+            maxLength={100}
+            placeholder="mis. Matematika"
+            className={inputClass}
+          />
+        </div>
+        <div className="space-y-2">
+          <label htmlFor="join-nip" className="text-sm font-medium">
+            NIP <span className="font-normal text-muted-foreground">(opsional)</span>
+          </label>
+          <input
+            id="join-nip"
+            name="nip"
+            type="text"
+            maxLength={50}
+            placeholder="mis. 198501012010011001"
+            className={inputClass}
+          />
+        </div>
+      </div>
+      <div className="space-y-2">
+        <label htmlFor="join-homeroom" className="text-sm font-medium">
+          Wali Kelas <span className="font-normal text-muted-foreground">(opsional)</span>
+        </label>
+        <input
+          id="join-homeroom"
+          name="homeroomClass"
+          type="text"
+          maxLength={50}
+          placeholder="mis. VII-A (kosongkan bila bukan)"
+          className={inputClass}
+        />
+      </div>
       <SubmitButton label="Gabung ke Sekolah" pendingLabel="Memproses..." />
     </form>
   );
