@@ -118,10 +118,12 @@ Halaman masih placeholder "Modul ini akan segera tersedia":
       ukuran logo 24–64 px. Sidebar (desktop, drawer, ciut) menampilkan logo +
       nama sekolah; guru otomatis mengikuti sekolahnya. Migrasi `00005`.
 - [ ] Regenerate kode undangan belum ada (lihat+salin sudah ada ronde-8).
-- [ ] Tombol **"Tambah Guru"** dihapus dari UI ronde-10 (sebelumnya dummy);
-      (tidak ada UI tambah/ubah kompetensi — `upsertTeacherCompetency` tanpa
-      pemanggil; tidak ada edit/hapus guru). Sampai diperbaiki, guru baru hanya
-      masuk via alur undangan `/onboarding`.
+- [x] (ronde-13) Audit dummy total: semua link exiting route; tombol Hapus
+      Supervisi/Coaching (konfirmasi + redirect, service sudah terkunci
+      principal); **input nilai kompetensi** di profil guru (dropdown master +
+      skor + sumber → upsert + growth recalc + audit). Modul guru/detail tetap
+      tanpa tambah/edit/hapus data guru (createTeacher rusak — item di bawah);
+      guru baru masuk via alur undangan `/onboarding`.
 
 ### Kualitas & rilis (Task 17–20)
 

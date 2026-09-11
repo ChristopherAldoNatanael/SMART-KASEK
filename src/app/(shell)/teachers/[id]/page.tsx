@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, TrendingDown, TrendingUp } from "lucide-react";
+import { getCurrentUser } from "@/lib/auth";
+import { hasRole } from "@/lib/permissions";
 import { getTeacherById } from "@/services/teacher.service";
 import { getTeacherCompetencySummary } from "@/services/competency.service";
 import {
@@ -8,6 +10,7 @@ import {
   calculateGrowthPercentage,
 } from "@/services/growth.service";
 import { Badge, PageHeader, Panel } from "@/components/common";
+import CompetencyForm from "@/components/teachers/competency-form";
 
 const DIMENSIONS = [
   { label: "Pedagogik", key: "pedagogic_score" },
@@ -31,13 +34,16 @@ export default async function TeacherDetailPage({
     notFound();
   }
 
-  const [competencySummary, latestGrowth, growthPercentage] = await Promise.all(
-    [
+  const [competencySummary, latestGrowth, growthPercentage, viewer] =
+    await Promise.all([
       getTeacherCompetencySummary(id).catch(() => []),
       getLatestGrowthSnapshot(id).catch(() => null),
       calculateGrowthPercentage(id).catch(() => null),
-    ]
-  );
+      getCurrentUser().catch(() => null),
+    ]);
+
+  const canScore =
+    viewer !== null && hasRole(viewer.role, "principal");
 
   return (
     <div className="space-y-6">
@@ -163,6 +169,24 @@ export default async function TeacherDetailPage({
           <p className="text-sm text-muted-foreground">
             Belum ada data kompetensi untuk guru ini.
           </p>
+        )}
+
+        {canScore && competencySummary.length > 0 && (
+          <div className="mt-5 border-t pt-5">
+            <h3 className="text-sm font-semibold">Input Nilai Kompetensi</h3>
+            <p className="mb-3 mt-1 text-xs text-muted-foreground">
+              Menyimpan nilai langsung memperbarui profil perkembangan di atas.
+            </p>
+            <CompetencyForm
+              teacherId={id}
+              competencies={competencySummary.map((c) => ({
+                id: c.competencyId,
+                name: c.name,
+                category: c.category,
+                latestScore: c.latestScore,
+              }))}
+            />
+          </div>
         )}
       </Panel>
     </div>

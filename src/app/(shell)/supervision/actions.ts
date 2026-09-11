@@ -6,6 +6,7 @@ import { requireUser, type CurrentUser } from "@/lib/auth";
 import { hasRole } from "@/lib/permissions";
 import {
   createSupervision,
+  deleteSupervision,
   updateSupervision,
 } from "@/services/supervision.service";
 import { logAuditEvent } from "@/services/audit.service";
@@ -150,4 +151,31 @@ export async function updateSupervisionStatusAction(
   revalidatePath("/supervision");
   revalidatePath(`/supervision/${parsed.data.supervisionId}`);
   return succeed();
+}
+
+/**
+ * Delete a supervision (principal only, enforced in service).
+ */
+export async function deleteSupervisionAction(
+  _prev: { ok: boolean; error: string | null },
+  formData: FormData
+): Promise<{ ok: boolean; error: string | null }> {
+  const gate = await requireSupervisionMutation();
+  if (!gate.user) return fail(gate.error);
+
+  const id = formData.get("supervisionId");
+  if (typeof id !== "string" || !id) return fail("Supervisi tidak valid");
+
+  try {
+    await deleteSupervision(id);
+    await logAuditEvent({ action: "delete", entity: "supervisions", entityId: id });
+  } catch (error) {
+    console.error("deleteSupervisionAction error:", error);
+    return fail(
+      error instanceof Error ? error.message : "Gagal menghapus supervisi"
+    );
+  }
+
+  revalidatePath("/supervision");
+  redirect("/supervision");
 }

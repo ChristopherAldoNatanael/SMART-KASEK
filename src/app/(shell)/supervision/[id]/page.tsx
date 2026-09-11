@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { getSupervisionById } from "@/services/supervision.service";
+import { deleteSupervisionAction } from "../actions";
+import DeleteButton from "@/components/delete-button";
 import SupervisionStatusForm from "@/components/supervision/supervision-status-form";
 import { Badge, PageHeader, Panel } from "@/components/common";
 
@@ -51,7 +53,7 @@ export default async function SupervisionDetailPage({
         title={supervision.teacher?.profile?.full_name ?? "Tanpa nama"}
         description={`Tipe: ${supervision.type ?? "—"} • Supervisor: ${supervision.supervisor?.full_name ?? "—"}`}
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <Badge tone={STATUS_TONES[supervision.status] ?? "neutral"}>
               {STATUS_LABELS[supervision.status] ?? supervision.status}
             </Badge>
@@ -61,6 +63,13 @@ export default async function SupervisionDetailPage({
             >
               Buat Coaching
             </Link>
+            <DeleteButton
+              action={deleteSupervisionAction}
+              idName="supervisionId"
+              idValue={supervision.id}
+              label="Hapus"
+              confirmText="Hapus supervisi ini beserta seluruh indikatornya?"
+            />
           </div>
         }
       />

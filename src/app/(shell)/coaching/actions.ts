@@ -7,6 +7,7 @@ import { hasRole } from "@/lib/permissions";
 import {
   addCoachingAction,
   createCoachingSession,
+  deleteCoachingSession,
   getCoachingSessionById,
   updateCoachingAction,
   updateCoachingSession,
@@ -232,6 +233,37 @@ export async function updateActionAction(
     revalidatePath(`/coaching/${sessionId}`);
   }
   return succeed();
+}
+
+/**
+ * Delete a coaching session (principal only, enforced in service).
+ */
+export async function deleteSessionAction(
+  _prev: CoachingActionState,
+  formData: FormData
+): Promise<CoachingActionState> {
+  const gate = await requireCoachMutation();
+  if (!gate.user) return fail(gate.error);
+
+  const id = formData.get("sessionId");
+  if (typeof id !== "string" || !id) return fail("Sesi coaching tidak valid");
+
+  try {
+    await deleteCoachingSession(id);
+    await logAuditEvent({
+      action: "delete",
+      entity: "coaching_sessions",
+      entityId: id,
+    });
+  } catch (error) {
+    console.error("deleteSessionAction error:", error);
+    return fail(
+      error instanceof Error ? error.message : "Gagal menghapus sesi coaching"
+    );
+  }
+
+  revalidatePath("/coaching");
+  redirect("/coaching");
 }
 
 /**

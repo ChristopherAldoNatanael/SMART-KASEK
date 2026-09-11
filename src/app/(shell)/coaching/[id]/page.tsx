@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { getCoachingSessionById } from "@/services/coaching.service";
+import { deleteSessionAction } from "../actions";
+import DeleteButton from "@/components/delete-button";
 import {
   AddActionForm,
   SessionStatusForm,
@@ -74,9 +76,18 @@ export default async function CoachingDetailPage({
         title={session.teacher?.profile?.full_name ?? "Tanpa nama"}
         description={`Coach: ${session.coach?.full_name ?? "—"} • Fokus: ${session.focus_area ?? "—"} • ${doneCount}/${session.actions?.length ?? 0} tindakan selesai`}
         actions={
-          <Badge tone={STATUS_TONES[session.status] ?? "neutral"}>
-            {STATUS_LABELS[session.status] ?? session.status}
-          </Badge>
+          <div className="flex items-center gap-3">
+            <Badge tone={STATUS_TONES[session.status] ?? "neutral"}>
+              {STATUS_LABELS[session.status] ?? session.status}
+            </Badge>
+            <DeleteButton
+              action={deleteSessionAction}
+              idName="sessionId"
+              idValue={session.id}
+              label="Hapus"
+              confirmText="Hapus sesi coaching ini beserta seluruh tindak lanjutnya?"
+            />
+          </div>
         }
       />
 
