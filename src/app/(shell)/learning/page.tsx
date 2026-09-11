@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { BookOpenText, Plus } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth";
-import { getLessonPlans } from "@/services/lesson.service";
+import { getLessonPlans, getLessonSubmissionStats } from "@/services/lesson.service";
 import LessonDeleteButton from "@/components/learning/lesson-delete-button";
 import { Badge, Empty, PageHeader, Panel } from "@/components/common";
 
@@ -18,6 +18,33 @@ const STATUS_LABELS: Record<string, string> = {
   published: "Dipublikasikan",
   archived: "Diarsipkan",
 };
+
+/** Ubah URL YouTube apa pun menjadi URL embed. Null bila bukan YouTube. */
+function youtubeEmbed(url: string): string | null {
+  try {
+    const u = new URL(url);
+    const host = u.hostname.replace(/^www\./, "");
+    if (host === "youtube.com" || host === "m.youtube.com") {
+      if (u.pathname === "/watch") {
+        const id = u.searchParams.get("v");
+        return id ? `https://www.youtube.com/embed/${id}` : null;
+      }
+      if (u.pathname.startsWith("/shorts/")) {
+        const id = u.pathname.split("/")[2];
+        return id ? `https://www.youtube.com/embed/${id}` : null;
+      }
+      if (u.pathname.startsWith("/embed/")) return url;
+      return null;
+    }
+    if (host === "youtu.be") {
+      const id = u.pathname.split("/")[1];
+      return id ? `https://www.youtube.com/embed/${id}` : null;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 export default async function LearningPage() {
   const user = await getCurrentUser();
@@ -43,9 +70,13 @@ export default async function LearningPage() {
   const isPrincipal = user.role === "principal" || user.role === "admin";
 
   let plans: Awaited<ReturnType<typeof getLessonPlans>> = [];
+  let submission = { teacherCount: 0, submittedCount: 0, percent: 0 };
   let loadError: string | null = null;
   try {
-    plans = await getLessonPlans();
+    [plans, submission] = await Promise.all([
+      getLessonPlans(),
+      getLessonSubmissionStats(),
+    ]);
   } catch (error) {
     loadError =
       error instanceof Error ? error.message : "Gagal memuat modul ajar";
@@ -78,6 +109,36 @@ export default async function LearningPage() {
           className="rounded-xl border border-destructive/20 bg-destructive/5 p-4 text-sm text-destructive"
         >
           {loadError}
+        </div>
+      )}
+
+      {!loadError && submission.teacherCount > 0 && (
+        <div className="rounded-xl border bg-card p-5 shadow-[0_1px_2px_rgba(16,24,40,0.05)]">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <p className="text-sm font-medium">
+              Pengumpulan Modul Ajar
+            </p>
+            <p className="text-sm text-muted-foreground">
+              <span className="tnum text-lg font-bold text-foreground">
+                {submission.percent}%
+              </span>{" "}
+              ({submission.submittedCount} dari {submission.teacherCount} guru
+              sudah mengumpulkan)
+            </p>
+          </div>
+          <div
+            className="mt-3 h-2.5 overflow-hidden rounded-full bg-muted"
+            role="img"
+            aria-label={`${submission.percent} persen guru sudah mengumpulkan modul ajar`}
+          >
+            <div
+              className="h-full rounded-full bg-brand transition-[width]"
+              style={{ width: `${submission.percent}%` }}
+            />
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Dihitung dari modul berstatus Dipublikasikan.
+          </p>
         </div>
       )}
 
@@ -117,20 +178,52 @@ export default async function LearningPage() {
                   {plan.description}
                 </p>
               )}
-              <div className="mt-4 flex items-center gap-4 border-t pt-3 text-sm">
+              {plan.doc_url &&
+                (() => {
+                  const embed = youtubeEmbed(plan.doc_url as string);
+                  return embed ? (
+                    <div className="mt-3 overflow-hidden rounded-lg border">
+                      <iframe
+                        src={embed}
+                        title={`Video ${plan.title}`}
+                        className="aspect-video w-full"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                        loading="lazy"
+                      />
+                    </div>
+                  ) : null;
+                })()}
+              <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 border-t pt-3 text-sm">
                 {plan.semester && (
                   <span className="text-xs text-muted-foreground">
                     Semester {plan.semester}
                   </span>
                 )}
-                {plan.file_url && (
+                <Link
+                  href={`/learning/${plan.id}/edit`}
+                  className="font-medium text-brand hover:underline"
+                >
+                  Ubah
+                </Link>
+                {plan.downloadUrl && (
                   <a
-                    href={plan.file_url}
+                    href={plan.downloadUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="font-medium text-brand hover:underline"
                   >
-                    Buka Dokumen
+                    {plan.fileName ? `Unduh ${plan.fileName}` : "Buka Dokumen"}
+                  </a>
+                )}
+                {plan.doc_url && !youtubeEmbed(plan.doc_url) && (
+                  <a
+                    href={plan.doc_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-medium text-brand hover:underline"
+                  >
+                    Buka Tautan
                   </a>
                 )}
                 {isPrincipal && (

@@ -10,7 +10,10 @@ import {
   calculateGrowthPercentage,
 } from "@/services/growth.service";
 import { Badge, PageHeader, Panel } from "@/components/common";
-import CompetencyForm, { TeachingForm } from "@/components/teachers/competency-form";
+import CompetencyForm, {
+  TeacherProfileForm,
+  TeachingForm,
+} from "@/components/teachers/competency-form";
 
 const DIMENSIONS = [
   { label: "Pedagogik", key: "pedagogic_score" },
@@ -44,6 +47,11 @@ export default async function TeacherDetailPage({
 
   const canScore =
     viewer !== null && hasRole(viewer.role, "principal");
+  const canEditProfile =
+    canScore ||
+    (viewer?.role === "teacher" &&
+      teacher.profile_id !== null &&
+      teacher.profile_id === viewer.id);
 
   return (
     <div className="space-y-6">
@@ -60,9 +68,27 @@ export default async function TeacherDetailPage({
         title={teacher.profile?.full_name ?? "Tanpa nama"}
         description={`NIP ${teacher.nip ?? "—"} • NUPTK ${teacher.employee_number ?? "—"}${teacher.homeroom_class ? ` • Wali Kelas ${teacher.homeroom_class}` : ""}`}
         actions={
-          <Badge tone={teacher.profile?.is_active ? "success" : "neutral"}>
-            {teacher.profile?.is_active ? "Aktif" : "Nonaktif"}
-          </Badge>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge tone={teacher.profile?.is_active ? "success" : "neutral"}>
+              {teacher.profile?.is_active ? "Aktif" : "Nonaktif"}
+            </Badge>
+            {canScore && (
+              <>
+                <Link
+                  href={`/supervision/new?teacherId=${id}`}
+                  className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+                >
+                  Buat Supervisi
+                </Link>
+                <Link
+                  href={`/coaching/new?teacherId=${id}`}
+                  className="rounded-md border px-3 py-1.5 text-sm font-medium transition-colors hover:bg-muted"
+                >
+                  Buat Coaching
+                </Link>
+              </>
+            )}
+          </div>
         }
       />
 
@@ -78,12 +104,42 @@ export default async function TeacherDetailPage({
         }
       >
         {canScore ? (
-          <TeachingForm
-            teacherId={id}
-            subject={teacher.subject}
-            homeroomClass={teacher.homeroom_class}
-            nip={teacher.nip}
-          />
+          <div className="space-y-6">
+            <TeachingForm
+              teacherId={id}
+              subject={teacher.subject}
+              homeroomClass={teacher.homeroom_class}
+              nip={teacher.nip}
+            />
+            <div className="border-t pt-5">
+              <h3 className="mb-3 text-sm font-semibold">Data Pokok</h3>
+              <TeacherProfileForm
+                teacherId={id}
+                fullName={teacher.profile?.full_name ?? ""}
+                employeeNumber={teacher.employee_number}
+                department={teacher.department}
+                educationLevel={teacher.education_level}
+                employmentStatus={teacher.employment_status}
+                joinedAt={teacher.joined_at}
+              />
+            </div>
+          </div>
+        ) : canEditProfile ? (
+          <div className="space-y-6">
+            <p className="text-xs text-muted-foreground">
+              Penugasan mengajar ditentukan Kepala Sekolah. Data pokok di bawah
+              dapat Anda perbarui sendiri.
+            </p>
+            <TeacherProfileForm
+              teacherId={id}
+              fullName={teacher.profile?.full_name ?? ""}
+              employeeNumber={teacher.employee_number}
+              department={teacher.department}
+              educationLevel={teacher.education_level}
+              employmentStatus={teacher.employment_status}
+              joinedAt={teacher.joined_at}
+            />
+          </div>
         ) : (
           <dl className="grid gap-3 text-sm sm:grid-cols-2">
             <div>

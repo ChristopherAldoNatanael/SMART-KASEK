@@ -126,6 +126,39 @@ class OpenAICompatibleProvider implements IAIProvider {
 
 let providerInstance: IAIProvider | null = null;
 
+export type ProviderConfig = {
+  apiKey: string;
+  baseUrl: string;
+  model: string;
+};
+
+/** Build an OpenAI-compatible provider from explicit config (env or DB). */
+export function createProvider(config: ProviderConfig): IAIProvider {
+  return new OpenAICompatibleProvider(
+    config.apiKey,
+    config.baseUrl,
+    config.model
+  );
+}
+
+/** Env-based default config, or null when no key is configured. */
+export function getEnvProviderConfig(): (ProviderConfig & {
+  label: string;
+}) | null {
+  const { provider, model } = getProviderInfo();
+  const apiKey = process.env.AI_API_KEY;
+  if ((provider === "openai" || provider === "custom") && apiKey) {
+    const baseUrl =
+      provider === "openai"
+        ? "https://api.openai.com/v1"
+        : process.env.AI_BASE_URL || "";
+    if (baseUrl) {
+      return { apiKey, baseUrl, model, label: `env:${provider}:${model}` };
+    }
+  }
+  return null;
+}
+
 export function getAIProvider(): IAIProvider {
   if (providerInstance) {
     return providerInstance;

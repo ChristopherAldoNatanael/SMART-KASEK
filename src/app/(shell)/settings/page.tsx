@@ -1,4 +1,5 @@
-import { Settings2 } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight, Settings2 } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth";
 import { hasRole } from "@/lib/permissions";
 import { getMySchool } from "@/services/school.service";
@@ -93,6 +94,22 @@ export default async function SettingsPage() {
       >
         <SchoolLogoForm school={school} />
       </Panel>
+
+      <Link
+        href="/settings/ai"
+        className="group flex items-center justify-between gap-3 rounded-xl border bg-card p-5 shadow-[0_1px_2px_rgba(16,24,40,0.05)] transition-colors hover:border-brand/40"
+      >
+        <div>
+          <p className="font-semibold">Kelola AI</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            API key utama + cadangan (otomatis dipakai bila kuota habis).
+          </p>
+        </div>
+        <ArrowRight
+          className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-brand"
+          aria-hidden
+        />
+      </Link>
     </div>
   );
 }

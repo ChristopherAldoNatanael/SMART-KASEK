@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { UserRound } from "lucide-react";
+import { getCurrentUser } from "@/lib/auth";
+import { hasRole } from "@/lib/permissions";
 import { getTeachers } from "@/services/teacher.service";
+import TeacherActiveToggle from "@/components/teachers/teacher-active-toggle";
 import {
   Badge,
   Empty,
@@ -13,7 +16,11 @@ import {
 export const dynamic = "force-dynamic";
 
 export default async function TeachersPage() {
-  const teachers = await getTeachers();
+  const [user, teachers] = await Promise.all([
+    getCurrentUser(),
+    getTeachers(),
+  ]);
+  const canManage = user !== null && hasRole(user.role, "principal");
 
   return (
     <div className="space-y-6">
@@ -71,13 +78,21 @@ export default async function TeachersPage() {
                     {teacher.profile?.is_active ? "Aktif" : "Nonaktif"}
                   </Badge>
                 </td>
-                <td className="px-4 py-3 text-right">
-                  <Link
-                    href={`/teachers/${teacher.id}`}
-                    className="font-medium text-brand hover:underline"
-                  >
-                    Profil
-                  </Link>
+                <td className="px-4 py-3">
+                  <div className="flex items-center justify-end gap-3">
+                    <Link
+                      href={`/teachers/${teacher.id}`}
+                      className="text-sm font-medium text-brand hover:underline"
+                    >
+                      Lihat
+                    </Link>
+                    {canManage && (
+                      <TeacherActiveToggle
+                        teacherId={teacher.id}
+                        isActive={teacher.profile?.is_active ?? false}
+                      />
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}

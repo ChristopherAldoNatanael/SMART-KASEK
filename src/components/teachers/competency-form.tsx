@@ -3,6 +3,7 @@
 import { useFormState, useFormStatus } from "react-dom";
 import {
   saveCompetencyAction,
+  updateProfileAction,
   updateTeachingAction,
 } from "@/app/(shell)/teachers/actions";
 
@@ -226,6 +227,142 @@ export function TeachingForm({
         Kosongkan kolom Wali Kelas untuk menonaktifkan statusnya.
       </p>
       <SubmitButton label="Simpan Perubahan" pendingLabel="Menyimpan…" />
+    </form>
+  );
+}
+
+/**
+ * Edit teacher basic data (principal only).
+ */
+export function TeacherProfileForm({
+  teacherId,
+  fullName,
+  employeeNumber,
+  department,
+  educationLevel,
+  employmentStatus,
+  joinedAt,
+}: {
+  teacherId: string;
+  fullName: string;
+  employeeNumber: string | null;
+  department: string | null;
+  educationLevel: string | null;
+  employmentStatus: string | null;
+  joinedAt: string | null;
+}) {
+  const [state, formAction] = useFormState(updateProfileAction, {
+    ok: false,
+    error: null,
+  });
+
+  return (
+    <form action={formAction} className="space-y-3">
+      <input type="hidden" name="teacherId" value={teacherId} />
+      <StateMessage error={state.error} ok={state.ok} />
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="space-y-1.5 sm:col-span-2">
+          <label
+            htmlFor="profile-fullName"
+            className="text-xs font-medium text-muted-foreground"
+          >
+            Nama Lengkap
+          </label>
+          <input
+            id="profile-fullName"
+            name="fullName"
+            type="text"
+            required
+            minLength={3}
+            maxLength={200}
+            defaultValue={fullName}
+            className={inputClass}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <label
+            htmlFor="profile-employeeNumber"
+            className="text-xs font-medium text-muted-foreground"
+          >
+            NUPTK / Nomor Pegawai
+          </label>
+          <input
+            id="profile-employeeNumber"
+            name="employeeNumber"
+            type="text"
+            maxLength={50}
+            defaultValue={employeeNumber ?? ""}
+            className={inputClass}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <label
+            htmlFor="profile-department"
+            className="text-xs font-medium text-muted-foreground"
+          >
+            Departemen / Rumpun
+          </label>
+          <input
+            id="profile-department"
+            name="department"
+            type="text"
+            maxLength={100}
+            defaultValue={department ?? ""}
+            className={inputClass}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <label
+            htmlFor="profile-education"
+            className="text-xs font-medium text-muted-foreground"
+          >
+            Pendidikan Terakhir
+          </label>
+          <input
+            id="profile-education"
+            name="educationLevel"
+            type="text"
+            maxLength={50}
+            defaultValue={educationLevel ?? ""}
+            placeholder="mis. S1"
+            className={inputClass}
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <label
+              htmlFor="profile-employment"
+              className="text-xs font-medium text-muted-foreground"
+            >
+              Status Kepegawaian
+            </label>
+            <input
+              id="profile-employment"
+              name="employmentStatus"
+              type="text"
+              maxLength={30}
+              defaultValue={employmentStatus ?? ""}
+              className={inputClass}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label
+              htmlFor="profile-joined"
+              className="text-xs font-medium text-muted-foreground"
+            >
+              TMT
+            </label>
+            <input
+              id="profile-joined"
+              name="joinedAt"
+              type="date"
+              defaultValue={joinedAt ?? ""}
+              className={inputClass}
+            />
+          </div>
+        </div>
+      </div>
+      <SubmitButton label="Simpan Data" pendingLabel="Menyimpan…" />
     </form>
   );
 }

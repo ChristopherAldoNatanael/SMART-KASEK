@@ -9,7 +9,7 @@ import {
   type SchoolInsightContext,
 } from "@/lib/ai/context";
 import { buildPrompt } from "@/lib/ai/prompts";
-import { getAIProvider, getProviderInfo } from "@/lib/ai/provider";
+import { generateAIText } from "@/lib/ai/chain";
 import {
   validateAIOutputWithFallback,
   sanitizeAIOutput,
@@ -46,9 +46,11 @@ export async function generateCoachAnalysis(input: {
     // Build prompt
     const prompt = buildPrompt("coach", context, input.question);
 
-    // Get AI response
-    const provider = getAIProvider();
-    const rawResponse = await provider.generate(prompt);
+    // Get AI response (with automatic provider fallback)
+    const { text: rawResponse, label: modelLabel } = await generateAIText(
+      user.schoolId,
+      prompt
+    );
 
     // Validate and sanitize output
     const validatedOutput = validateAIOutputWithFallback(rawResponse);
@@ -62,7 +64,7 @@ export async function generateCoachAnalysis(input: {
       question: input.question || null,
       context: { teacher_id: input.teacherId },
       response: sanitizedOutput as unknown as object,
-      model: `${getProviderInfo().provider}:${getProviderInfo().model}`,
+      model: modelLabel,
     });
 
     return { success: true, data: sanitizedOutput };
@@ -91,9 +93,11 @@ export async function generateSchoolInsight(): Promise<AIServiceResult> {
     // Build prompt
     const prompt = buildPrompt("school_insight", context);
 
-    // Get AI response
-    const provider = getAIProvider();
-    const rawResponse = await provider.generate(prompt);
+    // Get AI response (with automatic provider fallback)
+    const { text: rawResponse, label: modelLabel } = await generateAIText(
+      user.schoolId,
+      prompt
+    );
 
     // Validate and sanitize output
     const validatedOutput = validateAIOutputWithFallback(rawResponse);
@@ -106,7 +110,7 @@ export async function generateSchoolInsight(): Promise<AIServiceResult> {
       feature: "school_insight",
       context: { teacher_count: context.teacherCount },
       response: sanitizedOutput as unknown as object,
-      model: `${getProviderInfo().provider}:${getProviderInfo().model}`,
+      model: modelLabel,
     });
 
     // Store insight
@@ -146,9 +150,11 @@ export async function generateEarlyWarning(): Promise<AIServiceResult> {
     // Build prompt
     const prompt = buildPrompt("early_warning", context);
 
-    // Get AI response
-    const provider = getAIProvider();
-    const rawResponse = await provider.generate(prompt);
+    // Get AI response (with automatic provider fallback)
+    const { text: rawResponse, label: modelLabel } = await generateAIText(
+      user.schoolId,
+      prompt
+    );
 
     // Validate and sanitize output
     const validatedOutput = validateAIOutputWithFallback(rawResponse);
@@ -161,7 +167,7 @@ export async function generateEarlyWarning(): Promise<AIServiceResult> {
       feature: "early_warning",
       context: { teacher_count: context.teacherCount },
       response: sanitizedOutput as unknown as object,
-      model: `${getProviderInfo().provider}:${getProviderInfo().model}`,
+      model: modelLabel,
     });
 
     // Store warnings if any
@@ -207,9 +213,11 @@ export async function handleAssistantChat(
     // Build prompt with question
     const prompt = buildPrompt("assistant", context, question);
 
-    // Get AI response
-    const provider = getAIProvider();
-    const rawResponse = await provider.generate(prompt);
+    // Get AI response (with automatic provider fallback)
+    const { text: rawResponse, label: modelLabel } = await generateAIText(
+      user.schoolId,
+      prompt
+    );
 
     // Validate and sanitize output
     const validatedOutput = validateAIOutputWithFallback(rawResponse);
@@ -223,7 +231,7 @@ export async function handleAssistantChat(
       question,
       context: { teacher_count: context.teacherCount },
       response: sanitizedOutput as unknown as object,
-      model: `${getProviderInfo().provider}:${getProviderInfo().model}`,
+      model: modelLabel,
     });
 
     return { success: true, data: sanitizedOutput };

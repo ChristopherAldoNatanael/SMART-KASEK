@@ -2,10 +2,9 @@
 
 import { useRef, useState } from "react";
 import { useFormState, useFormStatus } from "react-dom";
-import { createLessonPlanAction } from "@/app/(shell)/learning/actions";
+import { updateLessonPlanAction } from "@/app/(shell)/learning/actions";
 import { createClient } from "@/lib/supabase/client";
-
-export type TeacherOption = { id: string; name: string };
+import type { LessonPlanWithTeacher } from "@/services/lesson.service";
 
 const inputClass =
   "w-full rounded-md border bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
@@ -25,8 +24,8 @@ const ALLOWED_TYPES = [
 ];
 
 const STATUS_HINTS: Record<string, string> = {
-  draft: "Masih disusun — hanya Anda dan Kepala Sekolah yang melihat.",
-  published: "Siap dipakai mengajar dan terlihat dalam daftar.",
+  draft: "Hanya Anda yang melihat. Kepala Sekolah belum bisa melihat.",
+  published: "Terlihat Kepala Sekolah dan siap dipakai mengajar.",
   archived: "Arsip — tidak aktif, tetapi riwayat tetap tersimpan.",
 };
 
@@ -42,23 +41,19 @@ function SubmitButton() {
       disabled={pending}
       className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50"
     >
-      {pending ? "Menyimpan..." : "Simpan Modul Ajar"}
+      {pending ? "Menyimpan..." : "Simpan Perubahan"}
     </button>
   );
 }
 
-export default function LessonForm({
-  teachers,
-  isPrincipal,
+export default function LessonEditForm({
+  plan,
   schoolId,
-  ownTeacherId,
 }: {
-  teachers: TeacherOption[];
-  isPrincipal: boolean;
+  plan: LessonPlanWithTeacher;
   schoolId: string;
-  ownTeacherId: string | null;
 }) {
-  const [state, formAction] = useFormState(createLessonPlanAction, {
+  const [state, formAction] = useFormState(updateLessonPlanAction, {
     ok: false,
     error: null,
   });
@@ -66,7 +61,7 @@ export default function LessonForm({
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const [status, setStatus] = useState("draft");
+  const [status, setStatus] = useState(plan.status);
   const [submitting, setSubmitting] = useState(false);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -80,22 +75,6 @@ export default function LessonForm({
 
     const data = new FormData(form);
 
-    // Tentukan pemilik untuk path Storage.
-    const ownerId = isPrincipal
-      ? (data.get("teacherId") as string)
-      : (ownTeacherId ?? "");
-    if (isPrincipal && !ownerId) {
-      setUploadError("Pilih guru pemilik modul terlebih dahulu.");
-      return;
-    }
-    if (!isPrincipal && !ownerId) {
-      setUploadError(
-        "Data guru Anda belum terhubung. Minta Kepala Sekolah memastikan akun Anda tergabung."
-      );
-      return;
-    }
-
-    // Unggah langsung browser → Storage (byte tidak lewat server aplikasi).
     if (file) {
       if (!ALLOWED_TYPES.includes(file.type)) {
         setUploadError("Format berkas harus PDF, Word, PowerPoint, Excel, atau gambar.");
@@ -108,7 +87,7 @@ export default function LessonForm({
       setUploading(true);
       try {
         const supabase = createClient();
-        const path = `${schoolId}/${ownerId}/${Date.now()}-${fileNameSafe(file.name)}`;
+        const path = `${schoolId}/${plan.teacher_id}/${Date.now()}-${fileNameSafe(file.name)}`;
         const { error } = await supabase.storage
           .from("lesson-docs")
           .upload(path, file, { contentType: file.type, upsert: false });
@@ -131,28 +110,13 @@ export default function LessonForm({
 
   return (
     <form ref={formRef} action={formAction} onSubmit={handleSubmit} className="space-y-4">
+      <input type="hidden" name="lessonId" value={plan.id} />
       {(state.error || uploadError) && (
         <div
           role="alert"
           className="rounded-md border border-destructive/20 bg-destructive/5 p-3 text-sm text-destructive"
         >
           {uploadError ?? state.error}
-        </div>
-      )}
-
-      {isPrincipal && (
-        <div className="space-y-2">
-          <label htmlFor="teacherId" className="text-sm font-medium">
-            Guru Pemilik <span className="text-destructive">*</span>
-          </label>
-          <select id="teacherId" name="teacherId" required className={inputClass}>
-            <option value="">Pilih guru</option>
-            {teachers.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
         </div>
       )}
 
@@ -167,7 +131,7 @@ export default function LessonForm({
           required
           minLength={3}
           maxLength={200}
-          placeholder="mis. Modul Ajar Matematika Kelas 7 — Aljabar"
+          defaultValue={plan.title}
           className={inputClass}
         />
       </div>
@@ -177,7 +141,14 @@ export default function LessonForm({
           <label htmlFor="subject" className="text-sm font-medium">
             Mata Pelajaran
           </label>
-          <input id="subject" name="subject" type="text" maxLength={100} className={inputClass} />
+          <input
+            id="subject"
+            name="subject"
+            type="text"
+            maxLength={100}
+            defaultValue={plan.subject ?? ""}
+            className={inputClass}
+          />
         </div>
         <div className="space-y-2">
           <label htmlFor="className" className="text-sm font-medium">
@@ -188,7 +159,7 @@ export default function LessonForm({
             name="className"
             type="text"
             maxLength={50}
-            placeholder="mis. VII-A"
+            defaultValue={plan.class_name ?? ""}
             className={inputClass}
           />
         </div>
@@ -201,7 +172,7 @@ export default function LessonForm({
             name="semester"
             type="text"
             maxLength={20}
-            placeholder="mis. Ganjil"
+            defaultValue={plan.semester ?? ""}
             className={inputClass}
           />
         </div>
@@ -216,7 +187,7 @@ export default function LessonForm({
           name="description"
           rows={5}
           maxLength={5000}
-          placeholder="Tujuan pembelajaran, kegiatan inti, asesmen..."
+          defaultValue={plan.description ?? ""}
           className={inputClass}
         />
       </div>
@@ -224,23 +195,21 @@ export default function LessonForm({
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
           <label htmlFor="docUrl" className="text-sm font-medium">
-            Tautan Dokumen <span className="font-normal text-muted-foreground">(opsional)</span>
+            Tautan Dokumen
           </label>
           <input
             id="docUrl"
             name="docUrl"
             type="url"
             maxLength={500}
-            placeholder="https://youtube.com/… atau situs lain"
+            defaultValue={plan.doc_url ?? ""}
+            placeholder="https://… (kosongkan untuk menghapus)"
             className={inputClass}
           />
-          <p className="text-xs text-muted-foreground">
-            Tautan apa pun: YouTube (tampil langsung di daftar), Drive, situs.
-          </p>
         </div>
         <div className="space-y-2">
           <label htmlFor="docFile" className="text-sm font-medium">
-            Atau Unggah Berkas <span className="font-normal text-muted-foreground">(opsional)</span>
+            Ganti Berkas
           </label>
           <input
             id="docFile"
@@ -252,31 +221,29 @@ export default function LessonForm({
           <p className="text-xs text-muted-foreground">
             {file
               ? `${file.name} (${(file.size / 1024 / 1024).toFixed(1)} MB)`
-              : "PDF/Office/gambar, maks 10 MB. Boleh diisi bersamaan dengan tautan."}
+              : plan.fileName
+                ? `Berkas saat ini: ${plan.fileName}`
+                : "Belum ada berkas. Maks 10 MB."}
           </p>
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="space-y-2">
-          <label htmlFor="status" className="text-sm font-medium">
-            Status
-          </label>
-          <select
-            id="status"
-            name="status"
-            value={status}
-            onChange={(e) => setStatus(e.target.value)}
-            className={inputClass}
-          >
-            <option value="draft">Draft</option>
-            <option value="published">Dipublikasikan</option>
-            <option value="archived">Diarsipkan</option>
-          </select>
-          <p className="text-xs text-muted-foreground">
-            {STATUS_HINTS[status]}
-          </p>
-        </div>
+      <div className="space-y-2">
+        <label htmlFor="status" className="text-sm font-medium">
+          Status
+        </label>
+        <select
+          id="status"
+          name="status"
+          value={status}
+          onChange={(e) => setStatus(e.target.value)}
+          className={inputClass}
+        >
+          <option value="draft">Draft</option>
+          <option value="published">Dipublikasikan</option>
+          <option value="archived">Diarsipkan</option>
+        </select>
+        <p className="text-xs text-muted-foreground">{STATUS_HINTS[status]}</p>
       </div>
 
       <SubmitButton />

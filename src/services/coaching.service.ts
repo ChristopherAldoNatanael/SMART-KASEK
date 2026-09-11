@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
+import { getOwnTeacherId } from "./teacher.service";
 import { requirePrincipal } from "@/lib/permissions";
 import type { Database } from "@/types/database";
 
@@ -24,7 +25,20 @@ export type CoachingSessionWithDetails = CoachingSession & {
 };
 
 /**
- * Get all coaching sessions for the current user's school.
+ * Resolve the own-teachers-row filter for teacher role.
+ * Null teacher id means: teacher sees an empty list, never others' rows.
+ */
+async function teacherScope(
+  role: string,
+  profileId: string,
+  schoolId: string
+): Promise<{ scoped: boolean; teacherId: string | null }> {
+  if (role !== "teacher") return { scoped: false, teacherId: null };
+  return { scoped: true, teacherId: await getOwnTeacherId(profileId, schoolId) };
+}
+
+/**
+ * Get coaching sessions: full school for principal, own rows for teacher.
  */
 export async function getCoachingSessions(): Promise<
   CoachingSessionWithDetails[]
@@ -33,8 +47,10 @@ export async function getCoachingSessions(): Promise<
   if (!user?.schoolId) return [];
 
   const supabase = await createClient();
+  const scope = await teacherScope(user.role, user.id, user.schoolId);
+  if (scope.scoped && !scope.teacherId) return [];
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("coaching_sessions")
     .select(
       `
@@ -47,6 +63,12 @@ export async function getCoachingSessions(): Promise<
     )
     .eq("school_id", user.schoolId)
     .order("session_date", { ascending: false });
+
+  if (scope.scoped && scope.teacherId) {
+    query = query.eq("teacher_id", scope.teacherId);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     throw new Error(error.message);
@@ -65,8 +87,10 @@ export async function getCoachingSessionById(
   if (!user?.schoolId) return null;
 
   const supabase = await createClient();
+  const scope = await teacherScope(user.role, user.id, user.schoolId);
+  if (scope.scoped && !scope.teacherId) return null;
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("coaching_sessions")
     .select(
       `
@@ -78,8 +102,13 @@ export async function getCoachingSessionById(
     `
     )
     .eq("id", id)
-    .eq("school_id", user.schoolId)
-    .single();
+    .eq("school_id", user.schoolId);
+
+  if (scope.scoped && scope.teacherId) {
+    query = query.eq("teacher_id", scope.teacherId);
+  }
+
+  const { data, error } = await query.single();
 
   if (error) {
     if (error.code === "PGRST116") {
@@ -99,6 +128,12 @@ export async function getTeacherCoachingSessions(
 ): Promise<CoachingSession[]> {
   const user = await getCurrentUser();
   if (!user?.schoolId) throw new Error("No school access");
+
+  // Teacher role may only query their own rows.
+  if (user.role === "teacher") {
+    const ownId = await getOwnTeacherId(user.id, user.schoolId);
+    if (ownId !== teacherId) throw new Error("Guru tidak ditemukan");
+  }
 
   const supabase = await createClient();
 
@@ -412,11 +447,27 @@ export async function getCoachingStats(): Promise<{
   }
 
   const supabase = await createClient();
+  const scope = await teacherScope(user.role, user.id, user.schoolId);
+  if (scope.scoped && !scope.teacherId) {
+    return {
+      totalSessions: 0,
+      totalActions: 0,
+      pendingActions: 0,
+      completedActions: 0,
+      overdueActions: 0,
+    };
+  }
 
-  const { data: sessions, error: sessionsError } = await supabase
+  let sessionsQuery = supabase
     .from("coaching_sessions")
     .select("id")
     .eq("school_id", user.schoolId);
+
+  if (scope.scoped && scope.teacherId) {
+    sessionsQuery = sessionsQuery.eq("teacher_id", scope.teacherId);
+  }
+
+  const { data: sessions, error: sessionsError } = await sessionsQuery;
 
   if (sessionsError) {
     throw new Error(sessionsError.message);

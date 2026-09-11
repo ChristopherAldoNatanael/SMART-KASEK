@@ -11,6 +11,7 @@ import {
   Siren,
   Sparkles,
   TrendingUp,
+  UserRound,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -47,6 +48,7 @@ const PRINCIPAL_NAV: NavItem[] = [
  */
 const TEACHER_NAV: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/profil", label: "Profil Saya", icon: UserRound },
   { href: "/supervision", label: "Supervisi", icon: ClipboardList },
   { href: "/coaching", label: "Coaching", icon: MessagesSquare },
   { href: "/learning", label: "Pembelajaran", icon: BookOpenText },

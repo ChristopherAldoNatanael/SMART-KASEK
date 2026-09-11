@@ -8,13 +8,22 @@ import { Empty, PageHeader, Panel } from "@/components/common";
 
 export const dynamic = "force-dynamic";
 
-export default async function NewSupervisionPage() {
+export default async function NewSupervisionPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ teacherId?: string }>;
+}) {
   const [user, teachers] = await Promise.all([
     getCurrentUser(),
     getTeachers(),
   ]);
 
   const canMutate = user !== null && hasRole(user.role, "principal");
+
+  const requestedTeacherId = (await searchParams)?.teacherId;
+  const defaultTeacherId = teachers.some((t) => t.id === requestedTeacherId)
+    ? requestedTeacherId
+    : undefined;
 
   return (
     <div className="space-y-6">
@@ -62,6 +71,7 @@ export default async function NewSupervisionPage() {
               name: t.profile?.full_name ?? "Tanpa nama",
             }))}
             defaultDate={new Date().toISOString().split("T")[0]}
+            defaultTeacherId={defaultTeacherId}
           />
         </Panel>
       )}

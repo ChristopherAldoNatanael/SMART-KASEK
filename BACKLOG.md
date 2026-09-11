@@ -54,19 +54,30 @@ Format status: `[ ]` belum dikerjakan · `[x]` selesai · `(ronde-N)` kapan sele
 
 ### P1 — Modul pendukung (SMART-KASEK.md §32, AGENTS.md §36)
 
-Halaman masih placeholder "Modul ini akan segera tersedia":
+- [x] (ronde-9/12) `/learning` → Modul Ajar fungsional; `/settings` → Pengaturan
+      sekolah fungsional. Tersisa placeholder:
+- [ ] `src/app/students/page.tsx` (Kesiswaan)
+- [ ] `src/app/administration/page.tsx` (Administrasi; riwayat audit di
+      `/administration/audit` sudah hidup)
 
-- [ ] `src/app/learning/page.tsx:42` (Jurnal, Modul Ajar, Asesmen)
-- [ ] `src/app/students/page.tsx:30` (Kesiswaan)
-- [ ] `src/app/administration/page.tsx:42` (Administrasi)
-- [ ] `src/app/settings/page.tsx:30` (Pengaturan)
+### Akses guru (janji SMART-KASEK.md §2 — dikerjakan bertahap)
 
-### Akses guru (janji SMART-KASEK.md §2 belum dipenuhi)
-
-- [ ] Role `teacher` di-redirect ke `/dashboard` oleh `requirePrincipal` sehingga
-      **tidak bisa membuka** `/growth` dan halaman AI. Padahal SMART-KASEK.md
-      menjanjikan guru melihat Supervisi Saya, Coaching, AI Coach miliknya.
-      Perlu: kebijakan akses "guru hanya data sendiri" di service + halaman.
+- [x] (ronde-18) **Profil Saya** (`/profil`): guru melihat detail lengkap
+      miliknya (penugasan, growth, supervisi, coaching, kompetensi) read-only
+      via `profile.service` teacher-scoped. Menu guru + ikon. `getTeacherById`
+      dikunci: guru via URL langsung hanya bisa membuka barisnya sendiri.
+- [x] (ronde-19) Teacher data isolation: guru hanya melihat barisnya sendiri
+      di supervisi + coaching (list, statistik, detail by URL) via
+      `teacherScope` + `getOwnTeacherId` bersama (dedupe dari lesson.service).
+      `getTeacherSupervisions/CoachingSessions` dikunci own-id. Principal tidak
+      berubah. Alasan vs samaran nama: yang bocor bukan cuma nama, tapi skor +
+      fokus coaching; samaran menambah bingung tanpa menutup.
+- [x] (ronde-20) CTA profil guru + panel penugasan: tombol Buat
+      Supervisi/Coaching (preselect teacherId; form supervisi kini dukung
+      defaultTeacherId) + panel Penugasan & Data Pokok read-only di Profil Saya.
+- [ ] Halaman `/growth` dan AI masih `requirePrincipal` — versi teacher-scoped
+      ("Growth Saya", "AI Coach Saya") belum ada; untuk sekarang guru memakai
+      `/profil` yang merangkum keduanya read-only.
 
 ### AI Assistant belum jadi asisten (§14)
 
@@ -97,10 +108,40 @@ Halaman masih placeholder "Modul ini akan segera tersedia":
       → Authentication → Sign in / Providers → Google Enabled, dan URL config
       mencakup `http://localhost:3000/auth/callback` (dev) + domain produksi
       + `/auth/callback`.
+- [x] (ronde-23) Diagnosis AI 500: `gemini-1.5-flash` pensiun (Google 404
+      NOT_FOUND). Key valid, diganti ke `gemini-2.5-flash` — terverifikasi
+      STATUS 200 + JSON valid via probe langsung (file probe dihapus).
+      Preset `.env.example` diperbarui. Perlu restart dev server agar model
+      baru terbaca.
+- [x] (ronde-24) AI fallback + Kelola AI: tabel `ai_provider_configs`
+      (migrasi `00009`, RLS principal-only), chain prioritas
+      (DB → env → error jujur) dipakai semua fitur AI, halaman
+      `/settings/ai` (tambah/nonaktif/hapus/tes koneksi, key hanya tampil
+      4 digit akhir). Key chat TIDAK disimpan ke file mana pun.
+- [x] (ronde-25) Upload dokumen modul ajar: bucket privat `lesson-docs`
+      (migrasi `00010` + policies sekolah/pemilik), unggah langsung
+      browser→Storage (byte tak lewat server), baca via signed URL/jam,
+      hapus berkas ikut hapus baris, hint status di form. Batas 10 MB.
+- [x] (ronde-26) Dokumen ganda: kolom `doc_url` (migrasi `00011`) untuk tautan
+      eksternal apa pun + upload tetap. YouTube (watch/shorts/youtu.be/embed)
+      tampil sebagai player inline di /learning; tautan lain jadi tombol
+      Buka Tautan; keduanya boleh terisi bersamaan.
+- [x] (ronde-27) Status & edit modul: draft hanya terlihat pemilik, published/
+      archived terlihat kepsek (`getLessonPlans` + `getLessonPlanById`
+      sadar-visibilitas). Halaman Ubah (`/learning/[id]/edit`, service
+      `updateLessonPlan` partial) — di sinilah draft→published diganti.
+- [x] (ronde-28) Persentase pengumpulan: `getLessonSubmissionStats` (guru
+      dengan ≥1 modul Dipublikasikan / total guru) + progress bar di /learning.
+      Input mandiri guru sudah ada sejak ronde-9; persen ini yang belum ada.
 - [x] (ronde-16) Callback pintar + NIP: `/auth/callback` cek profil — belum
       ada data → `/onboarding`, lengkap → tujuan semula/dashboard. NIP masuk
       form gabung (migrasi `00007`, `join_school` 4-param + drop signature lama)
       dan form Penugasan di profil guru. Skema DB vs tipe TS disinkronkan.
+- [x] (ronde-17) Aksi guru: kolom Aksi = Lihat + Nonaktifkan/Aktifkan
+      (reversibel, riwayat utuh; hapus permanen DITOLAK karena butuh service
+      key + merusak histori). Form Data Pokok di profil guru (nama, NUPTK,
+      departemen, pendidikan, status, TMT). Service `setTeacherActive`
+      school-scoped + RLS principal.
 - [x] (ronde-8) UI kode undangan: kartu "Kode Undangan Sekolah" + tombol
       Salin di dashboard Kepala Sekolah (`InviteCodeCard`). `getMySchoolInviteCode`
       dibuat tahan-gagal bila migrasi 00003 belum diterapkan (return null +

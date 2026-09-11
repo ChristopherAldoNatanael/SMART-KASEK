@@ -41,9 +41,11 @@ const EMPTY_ROW: ItemRow = {
 export default function SupervisionForm({
   teachers,
   defaultDate,
+  defaultTeacherId,
 }: {
   teachers: TeacherOption[];
   defaultDate: string;
+  defaultTeacherId?: string;
 }) {
   const [state, formAction] = useFormState(createSupervisionAction, {
     ok: false,
@@ -101,7 +103,13 @@ export default function SupervisionForm({
           <label htmlFor="teacherId" className="text-sm font-medium">
             Guru <span className="text-destructive">*</span>
           </label>
-          <select id="teacherId" name="teacherId" required className={inputClass}>
+          <select
+            id="teacherId"
+            name="teacherId"
+            required
+            defaultValue={defaultTeacherId ?? ""}
+            className={inputClass}
+          >
             <option value="">Pilih guru</option>
             {teachers.map((t) => (
               <option key={t.id} value={t.id}>

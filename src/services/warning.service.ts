@@ -9,7 +9,7 @@ import {
   type WarningFinding,
 } from "@/lib/early-warning/rules";
 import { buildWarningExplanationPrompt } from "@/lib/ai/prompts";
-import { getAIProvider, getProviderInfo } from "@/lib/ai/provider";
+import { generateAIText } from "@/lib/ai/chain";
 import {
   sanitizeAIOutput,
   validateAIOutputWithFallback,
@@ -268,7 +268,11 @@ export async function explainFinding(
     const supabase = await createClient();
 
     const prompt = buildWarningExplanationPrompt(finding);
-    const rawResponse = await getAIProvider().generate(prompt);
+    const { text: rawResponse, label: modelLabel } = await generateAIText(
+      user.schoolId,
+      prompt,
+      { maxTokens: 1200 }
+    );
     const sanitized = sanitizeAIOutput(
       validateAIOutputWithFallback(rawResponse)
     );
@@ -285,7 +289,7 @@ export async function explainFinding(
         evidence: finding.evidence,
       },
       response: sanitized as unknown as object,
-      model: `${getProviderInfo().provider}:${getProviderInfo().model}`,
+      model: modelLabel,
     });
 
     return { success: true, data: sanitized };

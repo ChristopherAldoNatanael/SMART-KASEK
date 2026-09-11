@@ -13,6 +13,70 @@ export type TeacherWithProfile = Teacher & {
   profile: Pick<Profile, "full_name" | "email" | "avatar_url" | "is_active"> | null;
 };
 
+async function isOwnTeacher(
+  profileId: string,
+  schoolId: string,
+  teacherId: string
+): Promise<boolean> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("teachers")
+    .select("id")
+    .eq("id", teacherId)
+    .eq("profile_id", profileId)
+    .eq("school_id", schoolId)
+    .single();
+  return !!data;
+}
+
+/**
+ * Resolve the teachers-row id for a profile (shared helper).
+ * Null when the account isn't linked to teacher data.
+ */
+export async function getOwnTeacherId(
+  profileId: string,
+  schoolId: string
+): Promise<string | null> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("teachers")
+    .select("id")
+    .eq("profile_id", profileId)
+    .eq("school_id", schoolId)
+    .single();
+  return data?.id ?? null;
+}
+
+/**
+ * Baris teachers milik user saat ini (untuk "Profil Saya").
+ * Null bila akun belum terhubung ke data guru.
+ */
+export async function getMyTeacher(): Promise<TeacherWithProfile | null> {
+  const user = await getCurrentUser();
+  if (!user?.schoolId) return null;
+
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("teachers")
+    .select(
+      `
+      *,
+      profile:profiles(full_name, email, avatar_url, is_active)
+    `
+    )
+    .eq("profile_id", user.id)
+    .eq("school_id", user.schoolId)
+    .single();
+
+  if (error) {
+    if (error.code === "PGRST116") return null;
+    throw new Error(error.message);
+  }
+
+  return data as TeacherWithProfile;
+}
+
 export async function getTeachers(): Promise<TeacherWithProfile[]> {
   const user = await getCurrentUser();
   if (!user?.schoolId) return [];
@@ -42,6 +106,14 @@ export async function getTeacherById(
 ): Promise<TeacherWithProfile | null> {
   const user = await getCurrentUser();
   if (!user?.schoolId) return null;
+
+  // Guru hanya boleh membuka profilnya sendiri (detail by URL).
+  if (
+    user.role === "teacher" &&
+    !(await isOwnTeacher(user.id, user.schoolId, id))
+  ) {
+    return null;
+  }
 
   const supabase = await createClient();
 
@@ -143,14 +215,14 @@ export async function updateTeacher(
   id: string,
   input: {
     fullName?: string;
-    employeeNumber?: string;
+    employeeNumber?: string | null;
     nip?: string | null;
     subject?: string | null;
     homeroomClass?: string | null;
-    department?: string;
-    educationLevel?: string;
-    employmentStatus?: string;
-    joinedAt?: string;
+    department?: string | null;
+    educationLevel?: string | null;
+    employmentStatus?: string | null;
+    joinedAt?: string | null;
   }
 ): Promise<Teacher> {
   const user = await getCurrentUser();
@@ -174,7 +246,7 @@ export async function updateTeacher(
   if (input.department !== undefined) updateData.department = input.department;
   if (input.educationLevel !== undefined)
     updateData.education_level = input.educationLevel;
-  if (input.employmentStatus !== undefined)
+  if (input.employmentStatus)
     updateData.employment_status = input.employmentStatus;
   if (input.joinedAt !== undefined) updateData.joined_at = input.joinedAt;
 
@@ -204,8 +276,40 @@ export async function updateTeacher(
   return data;
 }
 
-export async function deleteTeacher(id: string): Promise<void> {
+/**
+ * Activate/deactivate a teacher's login profile (principal only via caller).
+ * Reversible alternative to hard delete: deleted auth users cannot be
+ * removed without the service-role key, while deactivation keeps history
+ * (supervision, coaching, growth) intact.
+ */
+export async function setTeacherActive(
+  id: string,
+  isActive: boolean
+): Promise<void> {
   const user = await getCurrentUser();
+  if (!user?.schoolId) throw new Error("No school access");
+
+  const supabase = await createClient();
+
+  const teacher = await getTeacherById(id);
+  if (!teacher) {
+    throw new Error("Guru tidak ditemukan");
+  }
+  if (!teacher.profile_id) {
+    throw new Error("Profil guru tidak ditemukan");
+  }
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({ is_active: isActive })
+    .eq("id", teacher.profile_id);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
+export async function deleteTeacher(id: string): Promise<void> {  const user = await getCurrentUser();
   if (!user?.schoolId) throw new Error("No school access");
 
   const supabase = await createClient();

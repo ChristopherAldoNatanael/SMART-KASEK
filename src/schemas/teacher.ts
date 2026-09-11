@@ -24,6 +24,33 @@ export const updateTeachingSchema = z.object({
   nip: clearableText(50),
 });
 
+export const updateProfileSchema = z.object({
+  teacherId: z.string().uuid("Guru tidak valid"),
+  fullName: z.string().trim().min(3, "Nama minimal 3 karakter").max(200),
+  employeeNumber: clearableText(50),
+  department: clearableText(100),
+  educationLevel: clearableText(50),
+  employmentStatus: clearableText(30),
+  joinedAt: z.preprocess(
+    (v) =>
+      v == null || (typeof v === "string" && v.trim() === "")
+        ? undefined
+        : v,
+    z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "Tanggal tidak valid")
+      .optional()
+  ),
+});
+
+export const toggleActiveSchema = z.object({
+  teacherId: z.string().uuid("Guru tidak valid"),
+  active: z.preprocess(
+    (v) => v === "true" || v === true,
+    z.boolean()
+  ),
+});
+
 export function firstIssueMessage(error: z.ZodError): string {
   return error.issues[0]?.message ?? "Input tidak valid";
 }

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArrowLeft, School, Users } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth";
-import { getTeachers } from "@/services/teacher.service";
+import { getOwnTeacherId, getTeachers } from "@/services/teacher.service";
 import LessonForm from "@/components/learning/lesson-form";
 import { Empty, PageHeader, Panel } from "@/components/common";
 
@@ -14,6 +14,10 @@ export default async function NewLessonPage() {
   ]);
 
   const isPrincipal = user?.role === "principal" || user?.role === "admin";
+  const ownTeacherId =
+    user && !isPrincipal && user.schoolId
+      ? await getOwnTeacherId(user.id, user.schoolId).catch(() => null)
+      : null;
 
   return (
     <div className="space-y-6">
@@ -57,6 +61,8 @@ export default async function NewLessonPage() {
               name: t.profile?.full_name ?? "Tanpa nama",
             }))}
             isPrincipal={isPrincipal}
+            schoolId={user.schoolId}
+            ownTeacherId={ownTeacherId}
           />
         </Panel>
       )}

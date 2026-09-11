@@ -472,6 +472,7 @@ export interface Database {
           semester: string | null;
           description: string | null;
           file_url: string | null;
+          doc_url: string | null;
           status: string;
           created_at: string;
         };
@@ -484,6 +485,7 @@ export interface Database {
           semester?: string | null;
           description?: string | null;
           file_url?: string | null;
+          doc_url?: string | null;
           status?: string;
           created_at?: string;
         };
@@ -496,6 +498,7 @@ export interface Database {
           semester?: string | null;
           description?: string | null;
           file_url?: string | null;
+          doc_url?: string | null;
           status?: string;
           created_at?: string;
         };
