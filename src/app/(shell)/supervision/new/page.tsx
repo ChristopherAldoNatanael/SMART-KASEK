@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { ArrowLeft, School, ShieldAlert, Users } from "lucide-react";
+import { redirect } from "next/navigation";
+import { ArrowLeft, School, Users } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth";
 import { hasRole } from "@/lib/permissions";
 import { getTeachers } from "@/services/teacher.service";
@@ -20,6 +21,12 @@ export default async function NewSupervisionPage({
 
   const canMutate = user !== null && hasRole(user.role, "principal");
 
+  // Halaman ini khusus Kepala Sekolah (penjadwalan). Guru tidak punya
+  // alur di sini — kembalikan ke daftar agar tidak mentok di halaman buntu.
+  if (user?.schoolId && !canMutate) {
+    redirect("/supervision");
+  }
+
   const requestedTeacherId = (await searchParams)?.teacherId;
   const defaultTeacherId = teachers.some((t) => t.id === requestedTeacherId)
     ? requestedTeacherId
@@ -37,8 +44,8 @@ export default async function NewSupervisionPage({
 
       <PageHeader
         eyebrow="Pembelajaran"
-        title="Tambah Supervisi"
-        description="Catat hasil observasi beserta indikator penilaian 0–100."
+        title="Jadwalkan Supervisi"
+        description="Pilih guru dan tanggal. Supervisi tersimpan sebagai draft — penilaian diisi setelah guru melengkapi dokumen."
       />
 
       {!user?.schoolId ? (
@@ -48,12 +55,6 @@ export default async function NewSupervisionPage({
           description="Selesaikan penyiapan akun Anda terlebih dahulu."
           actionHref="/onboarding"
           actionLabel="Buka Halaman Penyiapan"
-        />
-      ) : !canMutate ? (
-        <Empty
-          icon={ShieldAlert}
-          title="Akses terbatas"
-          description="Hanya Kepala Sekolah yang dapat membuat supervisi."
         />
       ) : teachers.length === 0 ? (
         <Empty

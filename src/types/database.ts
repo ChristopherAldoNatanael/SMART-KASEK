@@ -327,6 +327,38 @@ export interface Database {
           created_at?: string;
         };
       };
+      supervision_documents: {
+        Row: {
+          id: string;
+          supervision_id: string;
+          doc_type: string;
+          file_path: string;
+          original_name: string;
+          mime_type: string;
+          file_size: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          supervision_id: string;
+          doc_type: string;
+          file_path: string;
+          original_name: string;
+          mime_type: string;
+          file_size: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          supervision_id?: string;
+          doc_type?: string;
+          file_path?: string;
+          original_name?: string;
+          mime_type?: string;
+          file_size?: number;
+          created_at?: string;
+        };
+      };
       coaching_sessions: {
         Row: {
           id: string;

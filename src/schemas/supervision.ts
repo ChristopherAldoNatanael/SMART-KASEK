@@ -59,6 +59,51 @@ export const createSupervisionSchema = z.object({
 
 export type CreateSupervisionInput = z.infer<typeof createSupervisionSchema>;
 
+/**
+ * Penjadwalan oleh Kepala Sekolah: cukup siapa + kapan + tipe.
+ * Selalu tersimpan sebagai draft; penilaian diisi belakangan di
+ * halaman detail setelah guru melengkapi dokumen.
+ */
+export const scheduleSupervisionSchema = z.object({
+  teacherId: z.string().uuid("Guru tidak valid"),
+  supervisionDate: z.string().regex(DATE_RE, "Tanggal supervisi tidak valid"),
+  type: optionalText(100),
+});
+
+export type ScheduleSupervisionInput = z.infer<typeof scheduleSupervisionSchema>;
+
+/**
+ * Penilaian susulan di halaman detail: tambah indikator + perbarui
+ * ringkasan/kekuatan/perlu ditingkatkan. Minimal 1 indikator.
+ */
+export const saveAssessmentSchema = z.object({
+  supervisionId: z.string().uuid("Supervisi tidak valid"),
+  summary: optionalText(5000),
+  strengths: optionalText(5000),
+  improvements: optionalText(5000),
+  itemsJson: z.preprocess(
+    (v) => {
+      if (typeof v !== "string" || v.trim() === "") return [];
+      try {
+        return JSON.parse(v);
+      } catch {
+        return v;
+      }
+    },
+    z
+      .array(supervisionItemSchema)
+      .min(1, "Tambahkan minimal 1 indikator")
+      .max(30, "Maksimal 30 indikator per supervisi")
+  ),
+});
+
+export type SaveAssessmentInput = z.infer<typeof saveAssessmentSchema>;
+
+export const deleteSupervisionItemSchema = z.object({
+  itemId: z.string().uuid("Indikator tidak valid"),
+  supervisionId: z.string().uuid("Supervisi tidak valid"),
+});
+
 export const updateSupervisionStatusSchema = z.object({
   supervisionId: z.string().uuid("Supervisi tidak valid"),
   status: z.enum(SUPERVISION_STATUSES),

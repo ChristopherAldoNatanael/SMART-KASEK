@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { ClipboardList, Plus } from "lucide-react";
+import { getCurrentUser } from "@/lib/auth";
+import { hasRole } from "@/lib/permissions";
 import {
   getSupervisions,
   getSupervisionStats,
@@ -30,25 +32,35 @@ const STATUS_TONES: Record<string, "neutral" | "success" | "warning" | "info"> =
 };
 
 export default async function SupervisionPage() {
-  const [supervisions, stats] = await Promise.all([
+  const [supervisions, stats, user] = await Promise.all([
     getSupervisions(),
     getSupervisionStats(),
+    getCurrentUser(),
   ]);
+  const isLeader =
+    user !== null && hasRole(user.role, "principal");
+  const isTeacher = user?.role === "teacher";
 
   return (
     <div className="space-y-6">
       <PageHeader
         eyebrow="Pembelajaran"
-        title="Supervisi"
-        description="Hasil observasi kelas dan temuan yang ditindaklanjuti coaching."
+        title={isTeacher ? "Supervisi Saya" : "Supervisi"}
+        description={
+          isTeacher
+            ? "Unggah 12 dokumen perangkat, pantau penilaian Kepala Sekolah, lalu lanjut coaching."
+            : "Periksa dokumen guru, nilai observasi kelas, dan tindaklanjuti dengan coaching."
+        }
         actions={
-          <Link
-            href="/supervision/new"
-            className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-          >
-            <Plus className="h-4 w-4" aria-hidden />
-            Tambah Supervisi
-          </Link>
+          isLeader ? (
+            <Link
+              href="/supervision/new"
+              className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+            >
+              <Plus className="h-4 w-4" aria-hidden />
+              Jadwalkan Supervisi
+            </Link>
+          ) : undefined
         }
       />
 
@@ -73,10 +85,14 @@ export default async function SupervisionPage() {
       {supervisions.length === 0 ? (
         <Empty
           icon={ClipboardList}
-          title="Belum ada data supervisi"
-          description="Catat supervisi pertama untuk mulai menggerakkan alur temuan → coaching → tindak lanjut."
-          actionHref="/supervision/new"
-          actionLabel="Tambah Supervisi"
+          title={isTeacher ? "Belum ada supervisi untuk Anda" : "Belum ada data supervisi"}
+          description={
+            isTeacher
+              ? "Kepala Sekolah akan menjadwalkan supervisi. Setelah ada, unggah 12 dokumen Anda di halaman detail."
+              : "Jadwalkan supervisi pertama — guru melengkapi dokumen, Anda menilai, lalu lanjut coaching."
+          }
+          actionHref={isLeader ? "/supervision/new" : undefined}
+          actionLabel={isLeader ? "Jadwalkan Supervisi" : undefined}
         />
       ) : (
         <TableShell>
