@@ -16,7 +16,6 @@ type SupervisionItemInsert =
 export type SupervisionWithDetails = Supervision & {
   teacher: { id: string; profile: { full_name: string | null } | null } | null;
   supervisor: { id: string; full_name: string | null } | null;
-  items: SupervisionItem[];
 };
 
 /**
@@ -50,8 +49,7 @@ export async function getSupervisions(): Promise<SupervisionWithDetails[]> {
       `
       *,
       teacher:teachers(id, profile:profiles(full_name)),
-      supervisor:profiles(full_name),
-      items:supervision_items(*)
+      supervisor:profiles(full_name)
     `
     )
     .eq("school_id", user.schoolId)
@@ -89,8 +87,7 @@ export async function getSupervisionById(
       `
       *,
       teacher:teachers(id, profile:profiles(full_name)),
-      supervisor:profiles(full_name),
-      items:supervision_items(*)
+      supervisor:profiles(full_name)
     `
     )
     .eq("id", id)
@@ -303,135 +300,9 @@ export async function updateSupervision(
 }
 
 /**
- * Rata-rata skor keseluruhan dari seluruh indikator terisi (0–100).
+ * Delete a supervision (plus documents and instrument assessment via
+ * database cascade). Requires principal role.
  */
-function averageScore(scores: (number | null | undefined)[]): number | null {
-  const filled = scores.filter((s): s is number => typeof s === "number");
-  if (filled.length === 0) return null;
-  return Math.round((filled.reduce((a, b) => a + b, 0) / filled.length) * 100) / 100;
-}
-
-/**
- * Tambah indikator penilaian belakangan (dipakai Kepala Sekolah di
- * halaman detail setelah guru melengkapi dokumen) + perbarui
- * ringkasan/kekuatan/perlu ditingkatkan. Skor keseluruhan dihitung
- * ulang dari seluruh indikator. Otorisasi principal dicek di actions.
- */
-export async function addSupervisionItems(
-  id: string,
-  input: {
-    items: {
-      indicator: string;
-      category?: string;
-      score?: number;
-      observation?: string;
-      recommendation?: string;
-    }[];
-    summary?: string;
-    strengths?: string;
-    improvements?: string;
-  }
-): Promise<Supervision> {
-  const user = await getCurrentUser();
-  if (!user?.schoolId) throw new Error("No school access");
-
-  const supervision = await getSupervisionById(id);
-  if (!supervision) {
-    throw new Error("Supervisi tidak ditemukan");
-  }
-
-  const supabase = await createClient();
-
-  if (input.items.length > 0) {
-    const itemsData: SupervisionItemInsert[] = input.items.map((item) => ({
-      supervision_id: id,
-      indicator: item.indicator,
-      category: item.category || null,
-      score: item.score ?? null,
-      observation: item.observation || null,
-      recommendation: item.recommendation || null,
-    }));
-    const { error: itemsError } = await supabase
-      .from("supervision_items")
-      .insert(itemsData);
-    if (itemsError) {
-      throw new Error(`Gagal menambahkan indikator: ${itemsError.message}`);
-    }
-  }
-
-  const { data: allItems, error: itemsFetchError } = await supabase
-    .from("supervision_items")
-    .select("score")
-    .eq("supervision_id", id);
-  if (itemsFetchError) {
-    throw new Error(itemsFetchError.message);
-  }
-
-  const updateData: SupervisionUpdate = {
-    overall_score: averageScore((allItems ?? []).map((i) => i.score)),
-  };
-  if (input.summary !== undefined) updateData.summary = input.summary || null;
-  if (input.strengths !== undefined) updateData.strengths = input.strengths || null;
-  if (input.improvements !== undefined)
-    updateData.improvements = input.improvements || null;
-
-  const { data, error } = await supabase
-    .from("supervisions")
-    .update(updateData)
-    .eq("id", id)
-    .eq("school_id", user.schoolId)
-    .select()
-    .single();
-  if (error) {
-    throw new Error(error.message);
-  }
-  return data;
-}
-
-/**
- * Hapus satu indikator + hitung ulang skor keseluruhan.
- * Otorisasi principal dicek di actions.
- */
-export async function deleteSupervisionItem(
-  supervisionId: string,
-  itemId: string
-): Promise<void> {
-  const user = await getCurrentUser();
-  if (!user?.schoolId) throw new Error("No school access");
-
-  const supervision = await getSupervisionById(supervisionId);
-  if (!supervision) {
-    throw new Error("Supervisi tidak ditemukan");
-  }
-
-  const supabase = await createClient();
-
-  const { error: deleteError } = await supabase
-    .from("supervision_items")
-    .delete()
-    .eq("id", itemId)
-    .eq("supervision_id", supervisionId);
-  if (deleteError) {
-    throw new Error(deleteError.message);
-  }
-
-  const { data: remaining, error: fetchError } = await supabase
-    .from("supervision_items")
-    .select("score")
-    .eq("supervision_id", supervisionId);
-  if (fetchError) {
-    throw new Error(fetchError.message);
-  }
-
-  const { error: updateError } = await supabase
-    .from("supervisions")
-    .update({ overall_score: averageScore((remaining ?? []).map((i) => i.score)) })
-    .eq("id", supervisionId)
-    .eq("school_id", user.schoolId);
-  if (updateError) {
-    throw new Error(updateError.message);
-  }
-}
 export async function deleteSupervision(id: string): Promise<void> {
   const user = await requirePrincipal();
   if (!user?.schoolId) throw new Error("No school access");

@@ -3,15 +3,17 @@ import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { getSupervisionById } from "@/services/supervision.service";
 import { getSupervisionDocuments } from "@/services/supervision-documents.service";
+import { getInstrumentAssessment } from "@/services/instrument-assessment.service";
+import { INSTRUMENT_ASPECTS } from "@/lib/supervision-instrument";
+import type { SupervisionDocType } from "@/lib/supervision-docs";
 import { getCurrentUser } from "@/lib/auth";
 import { hasRole } from "@/lib/permissions";
 import { deleteSupervisionAction } from "../actions";
 import DeleteButton from "@/components/delete-button";
 import SupervisionStatusForm from "@/components/supervision/supervision-status-form";
-import SupervisionAssessmentForm, {
-  SupervisionItemDeleteButton,
-} from "@/components/supervision/supervision-assessment-form";
 import SupervisionDocuments from "@/components/supervision/supervision-documents";
+import SupervisionInstrumentForm from "@/components/supervision/supervision-instrument-form";
+import SupervisionInstrumentResult from "@/components/supervision/supervision-instrument-result";
 import { Badge, PageHeader, Panel } from "@/components/common";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -43,6 +45,7 @@ export default async function SupervisionDetailPage({
     notFound();
   }
   const documents = await getSupervisionDocuments(id);
+  const instrument = await getInstrumentAssessment(id);
   const isLeader =
     user !== null && user.schoolId !== null && hasRole(user.role, "principal");
   // Guru mengunggah dokumen supervisinya sendiri; kepala sekolah menilai.
@@ -98,7 +101,7 @@ export default async function SupervisionDetailPage({
                 idName="supervisionId"
                 idValue={supervision.id}
                 label="Hapus"
-                confirmText="Hapus supervisi ini beserta seluruh indikatornya?"
+                confirmText="Hapus supervisi ini beserta dokumen dan penilaiannya?"
               />
             )}
           </div>
@@ -160,14 +163,16 @@ export default async function SupervisionDetailPage({
       </ol>
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <Panel title="Skor Keseluruhan">
+        <Panel title="Nilai Instrumen">
           <p className="tnum text-4xl font-bold tracking-tight">
             {supervision.overall_score ?? "—"}
           </p>
         </Panel>
-        <Panel title="Indikator Dinilai">
+        <Panel title="Aspek Dinilai">
           <p className="tnum text-4xl font-bold tracking-tight">
-            {supervision.items?.length ?? 0}
+            {instrument
+              ? `${instrument.items.filter((i) => i.score != null).length}/12`
+              : "—"}
           </p>
         </Panel>
         <Panel title="Status">
@@ -235,77 +240,95 @@ export default async function SupervisionDetailPage({
       </Panel>
 
       <Panel
-        title="Indikator Supervisi"
-        description="Setiap indikator dinilai 0–100 beserta observasi dan rekomendasi"
+        title="Penilaian Instrumen 12 Aspek"
+        description="Ada/Tidak + skor 1–4 per aspek. Nilai = (jumlah skor/48) × 100."
       >
-        {supervision.items && supervision.items.length > 0 ? (
-          <ul className="divide-y">
-            {supervision.items.map((item, index) => (
-              <li key={item.id} className="py-4 first:pt-0 last:pb-0">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                      #{index + 1}
-                      {item.category ? ` • ${item.category}` : ""}
-                    </p>
-                    <p className="mt-1 font-medium leading-snug">
-                      {item.indicator}
-                    </p>
-                    {item.observation && (
-                      <p className="mt-1.5 text-sm text-muted-foreground">
-                        <span className="font-medium text-foreground">
-                          Observasi:{" "}
-                        </span>
-                        {item.observation}
-                      </p>
-                    )}
-                    {item.recommendation && (
-                        <p className="mt-1 text-sm text-muted-foreground">
-                          <span className="font-medium text-foreground">
-                            Rekomendasi:{" "}
-                          </span>
-                          {item.recommendation}
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex shrink-0 flex-col items-end gap-2">
-                      <span className="tnum text-xl font-bold">
-                        {item.score ?? "—"}
-                      </span>
-                      {isLeader && (
-                        <SupervisionItemDeleteButton
-                          itemId={item.id}
-                          supervisionId={supervision.id}
-                          label={item.indicator}
-                        />
-                      )}
-                    </div>
-                </div>
-              </li>
-            ))}
-          </ul>
+        {isLeader ? (
+          <div className="space-y-6">
+            {instrument && instrument.assessment.status === "final" && (
+              <SupervisionInstrumentResult
+                teacherName={supervision.teacher?.profile?.full_name ?? "Tanpa nama"}
+                className={instrument.assessment.class_name ?? instrument.teacherClass}
+                dateLabel={date}
+                totalScore={instrument.assessment.total_score}
+                finalValue={instrument.assessment.final_value}
+                grade={instrument.assessment.grade}
+                status={instrument.assessment.status}
+                evaluation={instrument.assessment.evaluation}
+                items={INSTRUMENT_ASPECTS.map((a) => {
+                  const found = instrument.items.find(
+                    (i) => i.doc_type === a.docType
+                  );
+                  return {
+                    docType: a.docType as SupervisionDocType,
+                    label: a.label,
+                    present: found?.present ?? false,
+                    score: found?.score ?? null,
+                    note: found?.note ?? null,
+                  };
+                })}
+              />
+            )}
+            <SupervisionInstrumentForm
+              supervisionId={supervision.id}
+              teacherName={supervision.teacher?.profile?.full_name ?? "Tanpa nama"}
+              dateLabel={date}
+              teacherClassFallback={instrument?.teacherClass ?? null}
+              initialStatus={
+                instrument
+                  ? (instrument.assessment.status as "draft" | "final")
+                  : null
+              }
+              initialClassName={instrument?.assessment.class_name ?? null}
+              initialEvaluation={instrument?.assessment.evaluation ?? null}
+              initialItems={Object.fromEntries(
+                (instrument?.items ?? []).map((i) => [
+                  i.doc_type,
+                  {
+                    present: i.present,
+                    score: i.score,
+                    note: i.note ?? "",
+                  },
+                ])
+              )}
+              docs={documents.map((d) => ({
+                doc_type: d.doc_type,
+                original_name: d.original_name,
+                downloadUrl: d.downloadUrl,
+              }))}
+            />
+          </div>
+        ) : instrument && instrument.assessment.status === "final" ? (
+          <SupervisionInstrumentResult
+            teacherName={supervision.teacher?.profile?.full_name ?? "Tanpa nama"}
+            className={instrument.assessment.class_name ?? instrument.teacherClass}
+            dateLabel={date}
+            totalScore={instrument.assessment.total_score}
+            finalValue={instrument.assessment.final_value}
+            grade={instrument.assessment.grade}
+            status={instrument.assessment.status}
+            evaluation={instrument.assessment.evaluation}
+            items={INSTRUMENT_ASPECTS.map((a) => {
+              const found = instrument.items.find(
+                (i) => i.doc_type === a.docType
+              );
+              return {
+                docType: a.docType as SupervisionDocType,
+                label: a.label,
+                present: found?.present ?? false,
+                score: found?.score ?? null,
+                note: found?.note ?? null,
+              };
+            })}
+          />
         ) : (
           <p className="text-sm text-muted-foreground">
-            Belum ada indikator supervisi.
+            {instrument
+              ? "Kepala Sekolah sedang menyusun penilaian instrumen."
+              : "Belum ada penilaian instrumen. Penilaian dilakukan Kepala Sekolah setelah dokumen lengkap."}
           </p>
         )}
       </Panel>
-
-      {isLeader && (
-        <Panel
-          title="Tambah Penilaian"
-          description="Isi setelah dokumen guru lengkap. Skor keseluruhan dihitung ulang otomatis dari rata-rata seluruh indikator."
-        >
-          <SupervisionAssessmentForm
-            supervisionId={supervision.id}
-            initialSummary={supervision.summary}
-            initialStrengths={supervision.strengths}
-            initialImprovements={supervision.improvements}
-            docsComplete={docsComplete}
-            docsCount={documents.length}
-          />
-        </Panel>
-      )}
     </div>
   );
 }

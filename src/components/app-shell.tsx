@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Menu, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { logout } from "@/lib/auth/actions";
 import { Sidebar, SidebarDrawer } from "./sidebar";
+import { Toaster } from "./toaster";
 
 const COLLAPSE_KEY = "smart-kasek:sidebar-collapsed";
 
@@ -102,6 +103,7 @@ export function AppShell({
           {children}
         </main>
       </div>
+      <Toaster />
     </div>
   );
 }

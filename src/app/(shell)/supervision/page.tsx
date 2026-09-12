@@ -71,7 +71,7 @@ export default async function SupervisionPage() {
           { label: "Selesai", value: stats.completed },
           { label: "Tindak Lanjut", value: stats.followUp },
           {
-            label: "Rata-rata Skor",
+            label: "Rata-rata Nilai",
             value: stats.averageScore ?? "—",
           },
         ].map((s) => (
@@ -100,7 +100,7 @@ export default async function SupervisionPage() {
             <Th>Guru</Th>
             <Th>Tanggal</Th>
             <Th>Tipe</Th>
-            <Th className="text-right">Skor</Th>
+            <Th className="text-right">Nilai</Th>
             <Th>Status</Th>
             <Th className="text-right">Aksi</Th>
           </TableHead>

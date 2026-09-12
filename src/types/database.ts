@@ -359,6 +359,76 @@ export interface Database {
           created_at?: string;
         };
       };
+      supervision_instrument_assessments: {
+        Row: {
+          id: string;
+          supervision_id: string;
+          class_name: string | null;
+          evaluator_id: string | null;
+          total_score: number;
+          final_value: number;
+          grade: string;
+          evaluation: string | null;
+          status: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          supervision_id: string;
+          class_name?: string | null;
+          evaluator_id?: string | null;
+          total_score?: number;
+          final_value?: number;
+          grade?: string;
+          evaluation?: string | null;
+          status?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          supervision_id?: string;
+          class_name?: string | null;
+          evaluator_id?: string | null;
+          total_score?: number;
+          final_value?: number;
+          grade?: string;
+          evaluation?: string | null;
+          status?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      supervision_instrument_items: {
+        Row: {
+          id: string;
+          assessment_id: string;
+          doc_type: string;
+          present: boolean;
+          score: number | null;
+          note: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          assessment_id: string;
+          doc_type: string;
+          present?: boolean;
+          score?: number | null;
+          note?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          assessment_id?: string;
+          doc_type?: string;
+          present?: boolean;
+          score?: number | null;
+          note?: string | null;
+          created_at?: string;
+        };
+      };
       coaching_sessions: {
         Row: {
           id: string;

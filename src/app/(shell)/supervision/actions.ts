@@ -5,17 +5,23 @@ import { revalidatePath } from "next/cache";
 import { requireUser, type CurrentUser } from "@/lib/auth";
 import { hasRole } from "@/lib/permissions";
 import {
-  addSupervisionItems,
   createSupervision,
   deleteSupervision,
-  deleteSupervisionItem,
   updateSupervision,
 } from "@/services/supervision.service";
 import { logAuditEvent } from "@/services/audit.service";
 import {
-  deleteSupervisionItemSchema,
+  finalizeInstrumentAssessment,
+  saveInstrumentDraft,
+} from "@/services/instrument-assessment.service";
+import type { SupervisionDocType } from "@/lib/supervision-docs";
+import {
+  finalizeInstrumentSchema,
+  firstIssueMessage as firstInstrumentIssue,
+  saveInstrumentDraftSchema,
+} from "@/schemas/instrument-assessment";
+import {
   firstIssueMessage,
-  saveAssessmentSchema,
   scheduleSupervisionSchema,
   updateSupervisionStatusSchema,
 } from "@/schemas/supervision";
@@ -102,100 +108,6 @@ export async function scheduleSupervisionAction(
 }
 
 /**
- * Menyimpan penilaian susulan di halaman detail (Kepala Sekolah):
- * tambah indikator + perbarui ringkasan/kekuatan/perlu ditingkatkan.
- * Skor keseluruhan dihitung ulang otomatis oleh service.
- */
-export async function saveSupervisionAssessmentAction(
-  _prev: SupervisionActionState,
-  formData: FormData
-): Promise<SupervisionActionState> {
-  const gate = await requireSupervisionMutation();
-  if (!gate.user) return fail(gate.error);
-
-  const parsed = saveAssessmentSchema.safeParse({
-    supervisionId: formData.get("supervisionId"),
-    summary: formData.get("summary"),
-    strengths: formData.get("strengths"),
-    improvements: formData.get("improvements"),
-    itemsJson: formData.get("itemsJson"),
-  });
-
-  if (!parsed.success) {
-    return fail(firstIssueMessage(parsed.error));
-  }
-
-  try {
-    await addSupervisionItems(parsed.data.supervisionId, {
-      items: parsed.data.itemsJson.map((item) => ({
-        indicator: item.indicator,
-        category: item.category,
-        score: item.score,
-        observation: item.observation,
-        recommendation: item.recommendation,
-      })),
-      summary: parsed.data.summary,
-      strengths: parsed.data.strengths,
-      improvements: parsed.data.improvements,
-    });
-
-    await logAuditEvent({
-      action: "update",
-      entity: "supervisions",
-      entityId: parsed.data.supervisionId,
-      newData: { assessment_items_added: parsed.data.itemsJson.length },
-    });
-  } catch (error) {
-    console.error("saveSupervisionAssessmentAction error:", error);
-    return fail(
-      error instanceof Error ? error.message : "Gagal menyimpan penilaian"
-    );
-  }
-
-  revalidatePath("/supervision");
-  revalidatePath(`/supervision/${parsed.data.supervisionId}`);
-  return succeed();
-}
-
-/**
- * Hapus satu indikator penilaian (Kepala Sekolah).
- */
-export async function deleteSupervisionItemAction(
-  _prev: SupervisionActionState,
-  formData: FormData
-): Promise<SupervisionActionState> {
-  const gate = await requireSupervisionMutation();
-  if (!gate.user) return fail(gate.error);
-
-  const parsed = deleteSupervisionItemSchema.safeParse({
-    itemId: formData.get("itemId"),
-    supervisionId: formData.get("supervisionId"),
-  });
-
-  if (!parsed.success) {
-    return fail(firstIssueMessage(parsed.error));
-  }
-
-  try {
-    await deleteSupervisionItem(parsed.data.supervisionId, parsed.data.itemId);
-    await logAuditEvent({
-      action: "delete",
-      entity: "supervision_items",
-      entityId: parsed.data.itemId,
-    });
-  } catch (error) {
-    console.error("deleteSupervisionItemAction error:", error);
-    return fail(
-      error instanceof Error ? error.message : "Gagal menghapus indikator"
-    );
-  }
-
-  revalidatePath("/supervision");
-  revalidatePath(`/supervision/${parsed.data.supervisionId}`);
-  return succeed();
-}
-
-/**
  * Update a supervision's status.
  */
 export async function updateSupervisionStatusAction(
@@ -264,4 +176,97 @@ export async function deleteSupervisionAction(
 
   revalidatePath("/supervision");
   redirect("/supervision");
+}
+
+/**
+ * Simpan draft penilaian instrumen (Kepala Sekolah).
+ * Parsial diperbolehkan — bisa dilanjutkan nanti, aman dari refresh
+ * karena tersimpan di database.
+ */
+export async function saveInstrumentDraftAction(
+  _prev: SupervisionActionState,
+  formData: FormData
+): Promise<SupervisionActionState> {
+  const gate = await requireSupervisionMutation();
+  if (!gate.user) return fail(gate.error);
+
+  const parsed = saveInstrumentDraftSchema.safeParse({
+    supervisionId: formData.get("supervisionId"),
+    className: formData.get("className"),
+    evaluation: formData.get("evaluation"),
+    itemsJson: formData.get("itemsJson"),
+  });
+  if (!parsed.success) return fail(firstInstrumentIssue(parsed.error));
+
+  try {
+    const assessment = await saveInstrumentDraft({
+      supervisionId: parsed.data.supervisionId,
+      className: parsed.data.className,
+      evaluation: parsed.data.evaluation,
+      items: parsed.data.itemsJson.map((item) => ({
+        docType: item.docType as SupervisionDocType,
+        present: item.present,
+        score: item.score,
+        note: item.note,
+      })),
+    });
+    await logAuditEvent({
+      action: "update",
+      entity: "supervision_instrument_assessments",
+      entityId: assessment.id,
+      newData: { supervision_id: assessment.supervision_id, status: "draft" },
+    });
+  } catch (error) {
+    console.error("saveInstrumentDraftAction error:", error);
+    return fail(
+      error instanceof Error ? error.message : "Gagal menyimpan draft"
+    );
+  }
+
+  revalidatePath("/supervision");
+  revalidatePath(`/supervision/${parsed.data.supervisionId}`);
+  return succeed();
+}
+
+/**
+ * Finalisasi penilaian instrumen (Kepala Sekolah).
+ * Ditolak bila ada aspek tanpa skor 1-4.
+ */
+export async function finalizeInstrumentAction(
+  _prev: SupervisionActionState,
+  formData: FormData
+): Promise<SupervisionActionState> {
+  const gate = await requireSupervisionMutation();
+  if (!gate.user) return fail(gate.error);
+
+  const parsed = finalizeInstrumentSchema.safeParse({
+    supervisionId: formData.get("supervisionId"),
+  });
+  if (!parsed.success) return fail(firstInstrumentIssue(parsed.error));
+
+  try {
+    const assessment = await finalizeInstrumentAssessment(
+      parsed.data.supervisionId
+    );
+    await logAuditEvent({
+      action: "update",
+      entity: "supervision_instrument_assessments",
+      entityId: assessment.id,
+      newData: {
+        supervision_id: assessment.supervision_id,
+        status: "final",
+        total_score: assessment.total_score,
+        final_value: assessment.final_value,
+      },
+    });
+  } catch (error) {
+    console.error("finalizeInstrumentAction error:", error);
+    return fail(
+      error instanceof Error ? error.message : "Gagal menyelesaikan penilaian"
+    );
+  }
+
+  revalidatePath("/supervision");
+  revalidatePath(`/supervision/${parsed.data.supervisionId}`);
+  return succeed();
 }
