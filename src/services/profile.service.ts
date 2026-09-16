@@ -69,7 +69,9 @@ export async function getMyProfileData(): Promise<MyProfileData | null> {
     await Promise.all([
       supabase
         .from("teacher_competencies")
-        .select("score, assessed_at, source, competency:competencies(name, category)")
+        .select(
+          "score, assessed_at, source, competency:competencies(name, category, is_active)"
+        )
         .eq("teacher_id", teacherId)
         .order("assessed_at", { ascending: false }),
       supabase
@@ -97,19 +99,28 @@ export async function getMyProfileData(): Promise<MyProfileData | null> {
 
   return {
     teacher,
-    competencies: (competencies ?? []).map((c) => {
-      const comp = c.competency as unknown as {
-        name: string;
-        category: string;
-      } | null;
-      return {
-        name: comp?.name ?? "—",
-        category: comp?.category ?? "—",
-        score: c.score,
-        assessedAt: c.assessed_at,
-        source: c.source,
-      };
-    }),
+    competencies: (competencies ?? [])
+      .filter((c) => {
+        const comp = c.competency as unknown as {
+          is_active?: boolean | null;
+        } | null;
+        // Sembunyikan dimensi yang dinonaktifkan (00021);
+        // baris yatim (master terhapus) tetap tampil apa adanya.
+        return comp?.is_active !== false;
+      })
+      .map((c) => {
+        const comp = c.competency as unknown as {
+          name: string;
+          category: string;
+        } | null;
+        return {
+          name: comp?.name ?? "—",
+          category: comp?.category ?? "—",
+          score: c.score,
+          assessedAt: c.assessed_at,
+          source: c.source,
+        };
+      }),
     snapshots: (snapshots ?? []) as MySnapshot[],
     supervisions: (supervisions ?? []) as MySupervision[],
     coachings: (sessions ?? []).map((s) => {

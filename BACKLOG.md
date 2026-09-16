@@ -75,8 +75,10 @@ Format status: `[ ]` belum dikerjakan · `[x]` selesai · `(ronde-N)` kapan sele
 - [x] (ronde-20) CTA profil guru + panel penugasan: tombol Buat
       Supervisi/Coaching (preselect teacherId; form supervisi kini dukung
       defaultTeacherId) + panel Penugasan & Data Pokok read-only di Profil Saya.
-- [ ] Halaman `/growth` dan AI masih `requirePrincipal` — versi teacher-scoped
-      ("Growth Saya", "AI Coach Saya") belum ada; untuk sekarang guru memakai
+- [x] Halaman `/growth` teacher-scoped ("Growth Saya"): menu Teacher Growth
+      tampil untuk guru, cabang TeacherGrowthView read-only berisi snapshot
+      milik sendiri via getMyGrowthData (own-id di query). AI masih
+      `requirePrincipal` ("AI Coach Saya" belum ada); untuk sekarang guru memakai
       `/profil` yang merangkum keduanya read-only.
 
 ### AI Assistant belum jadi asisten (§14)

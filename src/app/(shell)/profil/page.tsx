@@ -17,9 +17,6 @@ export const dynamic = "force-dynamic";
 const DIMENSIONS = [
   { label: "Pedagogik", key: "pedagogic_score" },
   { label: "Profesional", key: "professional_score" },
-  { label: "Sosial", key: "social_score" },
-  { label: "Kepribadian", key: "personality_score" },
-  { label: "Digital", key: "digital_score" },
   { label: "Asesmen", key: "assessment_score" },
   { label: "Man. Kelas", key: "classroom_score" },
 ] as const;

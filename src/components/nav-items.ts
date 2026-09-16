@@ -34,13 +34,13 @@ const PRINCIPAL_NAV: NavItem[] = [
 ];
 
 /**
- * Teacher menu: only pages a teacher can actually open today.
- * /growth requires principal server-side, so it is intentionally
- * excluded until teacher-scoped access lands (BACKLOG).
+ * Teacher menu: only pages a teacher can actually open.
+ * /growth is teacher-scoped (own snapshots only, enforced server-side).
  */
 const TEACHER_NAV: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/profil", label: "Profil Saya", icon: UserRound },
+  { href: "/growth", label: "Teacher Growth", icon: TrendingUp },
   { href: "/supervision", label: "Supervisi", icon: ClipboardList },
   { href: "/coaching", label: "Coaching", icon: MessagesSquare },
   { href: "/learning", label: "Pembelajaran", icon: BookOpenText },

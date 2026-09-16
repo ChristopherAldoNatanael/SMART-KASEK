@@ -2,6 +2,8 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { requirePrincipal } from "@/lib/permissions";
+import { getCurrentUser } from "@/lib/auth";
+import { getOwnTeacherId } from "./teacher.service";
 import {
   average,
   dimensionColumnFor,
@@ -268,11 +270,24 @@ export async function recalculateTeacherGrowth(
     throw new Error("Guru tidak ditemukan");
   }
 
+  // Hanya master AKTIF yang dihitung. Dimensi yang dinonaktifkan
+  // (00021: Sosial/Kepribadian/Digital) tidak lagi menyumbang skor —
+  // riwayat nilai lamanya tetap tersimpan di database.
+  const { data: activeMasters } = await supabase
+    .from("competencies")
+    .select("id")
+    .eq("is_active", true);
+  const activeIds = (activeMasters ?? []).map((m) => m.id);
+  if (activeIds.length === 0) {
+    return null;
+  }
+
   // Latest score per competency (ordered newest-first, first wins)
   const { data: rows, error } = await supabase
     .from("teacher_competencies")
     .select("competency_id, score, assessed_at, competency:competencies(name)")
     .eq("teacher_id", teacherId)
+    .in("competency_id", activeIds)
     .order("assessed_at", { ascending: false });
 
   if (error) {
@@ -387,6 +402,36 @@ export async function recalculateAllGrowth(): Promise<{
   }
 
   return { total: teachers?.length ?? 0, updated, skipped };
+}
+
+/**
+ * Snapshot milik guru yang sedang login — untuk menu Teacher Growth
+ * role guru. Tanpa requirePrincipal; cakupan own-only ditegakkan di
+ * query (teacher_id = baris milik sendiri), bukan sekadar RLS.
+ * Null bila akun tidak terhubung ke data guru.
+ */
+export async function getMyGrowthData(): Promise<{
+  teacherId: string;
+  snapshots: GrowthSnapshot[];
+} | null> {
+  const user = await getCurrentUser();
+  if (!user?.schoolId) return null;
+
+  const ownId = await getOwnTeacherId(user.id, user.schoolId);
+  if (!ownId) return null;
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("teacher_growth_snapshots")
+    .select("*")
+    .eq("teacher_id", ownId)
+    .order("period", { ascending: true });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return { teacherId: ownId, snapshots: data ?? [] };
 }
 
 /**

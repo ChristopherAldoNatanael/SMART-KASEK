@@ -9,7 +9,7 @@ import {
   Users,
 } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth";
-import { getSchoolGrowthOverview } from "@/services/growth.service";
+import { getMyGrowthData, getSchoolGrowthOverview } from "@/services/growth.service";
 import { GrowthChart } from "@/components/charts/growth-chart";
 import { RecalculateGrowthButton } from "@/components/growth/recalculate-button";
 import {
@@ -27,9 +27,6 @@ export const dynamic = "force-dynamic";
 const DIMENSIONS: { label: string; key: string }[] = [
   { label: "Pedagogik", key: "pedagogic_score" },
   { label: "Profesional", key: "professional_score" },
-  { label: "Sosial", key: "social_score" },
-  { label: "Kepribadian", key: "personality_score" },
-  { label: "Digital", key: "digital_score" },
   { label: "Asesmen", key: "assessment_score" },
   { label: "Man. Kelas", key: "classroom_score" },
 ];
@@ -72,11 +69,14 @@ export default async function GrowthPage() {
     );
   }
 
+  if (user.role === "teacher") {
+    return <TeacherGrowthView />;
+  }
+
   let overview;
   try {
     overview = await getSchoolGrowthOverview();
-  } catch (error) {
-    return (
+  } catch (error) {    return (
       <div className="space-y-6">
         <PageHeader
           eyebrow="Perkembangan"
@@ -283,6 +283,172 @@ export default async function GrowthPage() {
           </TableShell>
         </>
       )}
+    </div>
+  );
+}
+
+/**
+ * Tampilan Teacher Growth untuk role guru: HANYA snapshot milik
+ * sendiri (diambil via getMyGrowthData yang memfilter teacher_id
+ * milik akun login — guru tidak pernah melihat data guru lain).
+ * Read-only: tanpa tombol Hitung Ulang, tanpa statistik sekolah.
+ */
+async function TeacherGrowthView() {
+  let mine: Awaited<ReturnType<typeof getMyGrowthData>>;
+  try {
+    mine = await getMyGrowthData();
+  } catch (error) {
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          eyebrow="Perkembangan"
+          title="Teacher Growth"
+          description="Perkembangan Anda berdasarkan penilaian, supervisi, dan coaching."
+        />
+        <div
+          role="alert"
+          className="rounded-xl border border-destructive/20 bg-destructive/5 p-4 text-sm text-destructive"
+        >
+          Gagal memuat data growth:{" "}
+          {error instanceof Error ? error.message : "Terjadi kesalahan"}
+        </div>
+      </div>
+    );
+  }
+
+  if (!mine) {
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          eyebrow="Perkembangan"
+          title="Teacher Growth"
+          description="Perkembangan Anda berdasarkan penilaian, supervisi, dan coaching."
+        />
+        <Empty
+          icon={Users}
+          title="Akun belum terhubung ke data guru"
+          description="Akun Anda belum terhubung ke data guru. Minta Kepala Sekolah memastikan data Anda."
+          actionHref="/profil"
+          actionLabel="Buka Profil Saya"
+        />
+      </div>
+    );
+  }
+
+  const snapshots = mine.snapshots;
+  const latest = snapshots.length > 0 ? snapshots[snapshots.length - 1] : null;
+  const previous = snapshots.length > 1 ? snapshots[snapshots.length - 2] : null;
+  const delta =
+    latest?.overall_score != null && previous?.overall_score != null
+      ? Math.round((latest.overall_score - previous.overall_score) * 100) / 100
+      : null;
+
+  if (!latest) {
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          eyebrow="Perkembangan"
+          title="Teacher Growth"
+          description="Perkembangan Anda berdasarkan penilaian, supervisi, dan coaching."
+        />
+        <Empty
+          icon={Sprout}
+          title="Belum ada data perkembangan"
+          description="Skor Anda akan muncul setelah Kepala Sekolah mengisi penilaian atau menyelesaikan supervisi. Selesaikan juga tindak lanjut coaching Anda tepat waktu."
+          actionHref="/coaching"
+          actionLabel="Lihat Coaching Saya"
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Perkembangan"
+        title="Teacher Growth"
+        description={`Periode ${latest.period} — dihitung dari penilaian Kepala Sekolah, supervisi, dan coaching Anda.`}
+        actions={
+          delta !== null ? (
+            <span
+              className={`inline-flex items-center gap-1 text-sm font-semibold ${
+                delta >= 0 ? "text-emerald-700" : "text-rose-600"
+              }`}
+            >
+              {delta >= 0 ? (
+                <TrendingUp className="h-4 w-4" aria-hidden />
+              ) : (
+                <TrendingDown className="h-4 w-4" aria-hidden />
+              )}
+              <span className="tnum">
+                {delta >= 0 ? "+" : ""}
+                {delta} dari periode lalu
+              </span>
+            </span>
+          ) : undefined
+        }
+      />
+
+      <Panel title="Skor Saya">
+        <div className="flex items-baseline gap-2">
+          <span
+            className={`tnum text-4xl font-bold tracking-tight ${scoreColor(latest.overall_score)}`}
+          >
+            {latest.overall_score ?? "—"}
+          </span>
+          <span className="text-sm text-muted-foreground">
+            skor overall / 100
+          </span>
+        </div>
+        <div className="mt-5 grid gap-x-8 gap-y-3 sm:grid-cols-2">
+          {DIMENSIONS.map((d) => {
+            const value =
+              (latest?.[d.key as keyof typeof latest] as number | null) ??
+              null;
+            return (
+              <div key={d.key}>
+                <div className="flex items-baseline justify-between text-sm">
+                  <span className="text-muted-foreground">{d.label}</span>
+                  <span className={`tnum font-semibold ${scoreColor(value)}`}>
+                    {value ?? "—"}
+                  </span>
+                </div>
+                <div
+                  className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted"
+                  role="img"
+                  aria-label={`${d.label}: ${value ?? "belum ada data"}`}
+                >
+                  <div
+                    className={`h-full rounded-full ${scoreBg(value)}`}
+                    style={{
+                      width: `${Math.min(100, Math.max(0, value ?? 0))}%`,
+                    }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </Panel>
+
+      <Panel
+        title="Tren Skor Saya"
+        description="Perkembangan skor overall dan tiap dimensi per periode"
+      >
+        <GrowthChart
+          data={snapshots.map((s) => ({
+            period: s.period,
+            overall: s.overall_score,
+            pedagogic: s.pedagogic_score,
+            professional: s.professional_score,
+            social: null,
+            personality: null,
+            digital: null,
+            assessment: s.assessment_score,
+            classroom: s.classroom_score,
+          }))}
+        />
+      </Panel>
     </div>
   );
 }

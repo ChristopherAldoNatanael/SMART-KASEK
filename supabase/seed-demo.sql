@@ -30,9 +30,9 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO competencies (id, name, category, description, weight, is_active) VALUES
   ('b0000000-0000-0000-0000-000000000001', 'Pedagogik', 'Inti', 'Kompetensi mengelola pembelajaran', 1.00, true),
   ('b0000000-0000-0000-0000-000000000002', 'Profesional', 'Inti', 'Kompetensi pengembangan profesional', 1.00, true),
-  ('b0000000-0000-0000-0000-000000000003', 'Sosial', 'Inti', 'Kompetensi berinteraksi dan berkomunikasi', 0.80, true),
-  ('b0000000-0000-0000-0000-000000000004', 'Kepribadian', 'Inti', 'Kompetensi kepribadian yang mantap', 0.80, true),
-  ('b0000000-0000-0000-0000-000000000005', 'Digital', 'Penunjang', 'Kompetensi pemanfaatan teknologi digital', 0.90, true),
+  ('b0000000-0000-0000-0000-000000000003', 'Sosial', 'Inti', 'NONAKTIF sejak 00021 — tidak dipakai', 0.80, false),
+  ('b0000000-0000-0000-0000-000000000004', 'Kepribadian', 'Inti', 'NONAKTIF sejak 00021 — tidak dipakai', 0.80, false),
+  ('b0000000-0000-0000-0000-000000000005', 'Digital', 'Penunjang', 'NONAKTIF sejak 00021 — tidak dipakai', 0.90, false),
   ('b0000000-0000-0000-0000-000000000006', 'Asesmen', 'Penunjang', 'Kompetensi penilaian pembelajaran', 1.00, true),
   ('b0000000-0000-0000-0000-000000000007', 'Manajemen Kelas', 'Penunjang', 'Kompetensi mengelola kelas', 0.90, true)
 ON CONFLICT (id) DO NOTHING;

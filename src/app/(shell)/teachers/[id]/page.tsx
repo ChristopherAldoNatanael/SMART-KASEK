@@ -55,9 +55,6 @@ function formatShortDate(value: string): string {
 const DIMENSIONS = [
   { label: "Pedagogik", key: "pedagogic_score" },
   { label: "Profesional", key: "professional_score" },
-  { label: "Sosial", key: "social_score" },
-  { label: "Kepribadian", key: "personality_score" },
-  { label: "Digital", key: "digital_score" },
   { label: "Asesmen", key: "assessment_score" },
   { label: "Manajemen Kelas", key: "classroom_score" },
 ] as const;
@@ -335,10 +332,9 @@ export default async function TeacherDetailPage({
           <div className="mt-5 border-t pt-5">
             <h3 className="text-sm font-semibold">Penilaian Kepala Sekolah</h3>
             <p className="mb-3 mt-1 text-xs text-muted-foreground">
-              Untuk dimensi yang belum terisi otomatis (Sosial, Kepribadian,
-              Digital): nilai dari observasi langsung Anda. Dasar penilaian
-              wajib diisi sebagai bukti. Menyimpan langsung memperbarui
-              profil perkembangan di atas.
+              Untuk nilai di luar hasil supervisi: dari observasi langsung
+              Anda. Dasar penilaian wajib diisi sebagai bukti. Menyimpan
+              langsung memperbarui profil perkembangan di atas.
             </p>
             <CompetencyForm
               teacherId={id}
