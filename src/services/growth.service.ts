@@ -346,6 +346,50 @@ export async function recalculateTeacherGrowth(
 }
 
 /**
+ * Hitung ulang snapshot periode berjalan untuk SEMUA guru di sekolah
+ * dari data kompetensi terkini. Dipakai tombol "Hitung Ulang" di
+ * halaman /growth agar Kepala Sekolah bisa mengisi halaman yang
+ * kosong tanpa menunggu trigger (nilai baru / coaching selesai).
+ * Guru tanpa data kompetensi dilewati (tidak membuat snapshot kosong).
+ */
+export async function recalculateAllGrowth(): Promise<{
+  total: number;
+  updated: number;
+  skipped: number;
+}> {
+  const user = await requirePrincipal();
+  if (!user.schoolId) throw new Error("No school access");
+
+  const supabase = await createClient();
+  const { data: teachers, error } = await supabase
+    .from("teachers")
+    .select("id")
+    .eq("school_id", user.schoolId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  let updated = 0;
+  let skipped = 0;
+  for (const t of teachers ?? []) {
+    try {
+      const snapshot = await recalculateTeacherGrowth(t.id);
+      if (snapshot) {
+        updated += 1;
+      } else {
+        skipped += 1;
+      }
+    } catch (err) {
+      console.error("recalculateAllGrowth error for teacher:", t.id, err);
+      skipped += 1;
+    }
+  }
+
+  return { total: teachers?.length ?? 0, updated, skipped };
+}
+
+/**
  * School-wide growth overview in 2 queries (no N+1, AGENTS.md §27).
  */
 export async function getSchoolGrowthOverview(): Promise<SchoolGrowthOverview> {

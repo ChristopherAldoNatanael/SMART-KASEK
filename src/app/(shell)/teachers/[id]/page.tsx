@@ -4,16 +4,53 @@ import { ArrowLeft, TrendingDown, TrendingUp } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth";
 import { hasRole } from "@/lib/permissions";
 import { getTeacherById } from "@/services/teacher.service";
-import { getTeacherCompetencySummary } from "@/services/competency.service";
+import {
+  getCompetencies,
+  getTeacherCompetencySummary,
+} from "@/services/competency.service";
 import {
   getLatestGrowthSnapshot,
   calculateGrowthPercentage,
 } from "@/services/growth.service";
+import { getTeacherSupervisions } from "@/services/supervision.service";
+import { getTeacherCoachingSessions } from "@/services/coaching.service";
 import { Badge, PageHeader, Panel } from "@/components/common";
 import CompetencyForm, {
   TeacherProfileForm,
   TeachingForm,
 } from "@/components/teachers/competency-form";
+
+const SUPERVISION_STATUS_LABELS: Record<string, string> = {
+  draft: "Draft",
+  completed: "Selesai",
+  follow_up: "Tindak Lanjut",
+  closed: "Ditutup",
+};
+
+const COACHING_STATUS_LABELS: Record<string, string> = {
+  scheduled: "Terjadwal",
+  in_progress: "Berlangsung",
+  completed: "Selesai",
+  cancelled: "Dibatalkan",
+};
+
+/** Label sumber skor kompetensi — setiap angka wajib punya jejak. */
+const COMPETENCY_SOURCE_LABELS: Record<string, string> = {
+  supervision: "Supervisi",
+  self_assessment: "Penilaian Diri",
+  coaching: "Coaching",
+  assessment: "Asesmen",
+  manual: "Penilaian Kepala Sekolah",
+  ai: "AI",
+};
+
+function formatShortDate(value: string): string {
+  return new Date(value).toLocaleDateString("id-ID", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
 
 const DIMENSIONS = [
   { label: "Pedagogik", key: "pedagogic_score" },
@@ -37,13 +74,23 @@ export default async function TeacherDetailPage({
     notFound();
   }
 
-  const [competencySummary, latestGrowth, growthPercentage, viewer] =
-    await Promise.all([
-      getTeacherCompetencySummary(id).catch(() => []),
-      getLatestGrowthSnapshot(id).catch(() => null),
-      calculateGrowthPercentage(id).catch(() => null),
-      getCurrentUser().catch(() => null),
-    ]);
+  const [
+    competencySummary,
+    latestGrowth,
+    growthPercentage,
+    viewer,
+    masterCompetencies,
+    supervisions,
+    coachingSessions,
+  ] = await Promise.all([
+    getTeacherCompetencySummary(id).catch(() => []),
+    getLatestGrowthSnapshot(id).catch(() => null),
+    calculateGrowthPercentage(id).catch(() => null),
+    getCurrentUser().catch(() => null),
+    getCompetencies().catch(() => []),
+    getTeacherSupervisions(id).catch(() => []),
+    getTeacherCoachingSessions(id).catch(() => []),
+  ]);
 
   const canScore =
     viewer !== null && hasRole(viewer.role, "principal");
@@ -52,6 +99,19 @@ export default async function TeacherDetailPage({
     (viewer?.role === "teacher" &&
       teacher.profile_id !== null &&
       teacher.profile_id === viewer.id);
+
+  // Opsi form diambil dari master kompetensi (bukan dari ringkasan),
+  // agar Kepala Sekolah tetap bisa mengisi nilai pertama walaupun
+  // guru ini belum punya satu pun skor.
+  const latestScoreById = new Map(
+    competencySummary.map((c) => [c.competencyId, c.latestScore])
+  );
+  const competencyOptions = masterCompetencies.map((c) => ({
+    id: c.id,
+    name: c.name,
+    category: c.category,
+    latestScore: latestScoreById.get(c.id) ?? null,
+  }));
 
   return (
     <div className="space-y-6">
@@ -225,16 +285,17 @@ export default async function TeacherDetailPage({
           </div>
         ) : (
           <p className="text-sm text-muted-foreground">
-            Belum ada snapshot perkembangan. Snapshot terhitung otomatis dari
-            data kompetensi dan diperbarui setiap tindak lanjut coaching
-            selesai.
+            Belum ada snapshot perkembangan. Snapshot terhitung otomatis
+            setelah ada data kompetensi — isi nilai kompetensi di bawah
+            atau selesaikan penilaian supervisi, maka profil ini terisi
+            sendiri.
           </p>
         )}
       </Panel>
 
       <Panel
         title="Kompetensi Terkini"
-        description="Skor terakhir per kompetensi dari berbagai sumber penilaian"
+        description="Skor terakhir per kompetensi — setiap angka tercatat sumber dan tanggalnya"
       >        {competencySummary.length > 0 ? (
           <ul className="divide-y">
             {competencySummary.map((item) => (
@@ -246,6 +307,16 @@ export default async function TeacherDetailPage({
                   <p className="truncate font-medium">{item.name}</p>
                   <p className="text-xs text-muted-foreground">
                     {item.category}
+                    {item.latestScore !== null && (
+                      <>
+                        {" • "}
+                        {item.source
+                          ? (COMPETENCY_SOURCE_LABELS[item.source] ?? item.source)
+                          : "—"}
+                        {item.assessedAt &&
+                          ` • ${formatShortDate(item.assessedAt)}`}
+                      </>
+                    )}
                   </p>
                 </div>
                 <span className="tnum text-lg font-bold">
@@ -260,22 +331,108 @@ export default async function TeacherDetailPage({
           </p>
         )}
 
-        {canScore && competencySummary.length > 0 && (
+        {canScore && competencyOptions.length > 0 && (
           <div className="mt-5 border-t pt-5">
-            <h3 className="text-sm font-semibold">Input Nilai Kompetensi</h3>
+            <h3 className="text-sm font-semibold">Penilaian Kepala Sekolah</h3>
             <p className="mb-3 mt-1 text-xs text-muted-foreground">
-              Menyimpan nilai langsung memperbarui profil perkembangan di atas.
+              Untuk dimensi yang belum terisi otomatis (Sosial, Kepribadian,
+              Digital): nilai dari observasi langsung Anda. Dasar penilaian
+              wajib diisi sebagai bukti. Menyimpan langsung memperbarui
+              profil perkembangan di atas.
             </p>
             <CompetencyForm
               teacherId={id}
-              competencies={competencySummary.map((c) => ({
-                id: c.competencyId,
-                name: c.name,
-                category: c.category,
-                latestScore: c.latestScore,
-              }))}
+              competencies={competencyOptions}
             />
           </div>
+        )}
+        {canScore && competencyOptions.length === 0 && (
+          <p className="mt-5 border-t pt-5 text-sm text-amber-700">
+            Master kompetensi belum tersedia — jalankan migrasi
+            00020_master_competencies di database agar nilai dapat diisi.
+          </p>
+        )}
+      </Panel>
+
+      <Panel
+        title="Riwayat Supervisi"
+        description={
+          supervisions.length > 0
+            ? `${supervisions.length} supervisi tercatat untuk guru ini`
+            : undefined
+        }
+      >
+        {supervisions.length > 0 ? (
+          <ul className="divide-y">
+            {supervisions.map((s) => (
+              <li
+                key={s.id}
+                className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0"
+              >
+                <div className="min-w-0">
+                  <Link
+                    href={`/supervision/${s.id}`}
+                    className="font-medium text-brand hover:underline"
+                  >
+                    Supervisi {formatShortDate(s.supervision_date)}
+                  </Link>
+                  <p className="text-xs text-muted-foreground">
+                    {s.type ?? "Supervisi"} •{" "}
+                    {SUPERVISION_STATUS_LABELS[s.status] ?? s.status}
+                  </p>
+                </div>
+                <span className="tnum shrink-0 text-lg font-bold">
+                  {s.overall_score ?? "—"}
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            Belum ada supervisi untuk guru ini.
+          </p>
+        )}
+      </Panel>
+
+      <Panel
+        title="Riwayat Coaching"
+        description={
+          coachingSessions.length > 0
+            ? `${coachingSessions.length} sesi coaching tercatat untuk guru ini`
+            : undefined
+        }
+      >
+        {coachingSessions.length > 0 ? (
+          <ul className="divide-y">
+            {coachingSessions.map((s) => (
+              <li
+                key={s.id}
+                className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0"
+              >
+                <div className="min-w-0">
+                  <Link
+                    href={`/coaching/${s.id}`}
+                    className="font-medium text-brand hover:underline"
+                  >
+                    {s.focus_area ?? "Coaching"}{" "}
+                    • {formatShortDate(s.session_date)}
+                  </Link>
+                  <p className="text-xs text-muted-foreground">
+                    {COACHING_STATUS_LABELS[s.status] ?? s.status}
+                  </p>
+                </div>
+                <Badge
+                  tone={s.status === "completed" ? "success" : "neutral"}
+                >
+                  {COACHING_STATUS_LABELS[s.status] ?? s.status}
+                </Badge>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            Belum ada coaching untuk guru ini.
+          </p>
         )}
       </Panel>
     </div>

@@ -13,6 +13,7 @@ import { logAuditEvent } from "@/services/audit.service";
 import {
   finalizeInstrumentAssessment,
   saveInstrumentDraft,
+  syncSupervisionToCompetencies,
 } from "@/services/instrument-assessment.service";
 import type { SupervisionDocType } from "@/lib/supervision-docs";
 import {
@@ -230,6 +231,9 @@ export async function saveInstrumentDraftAction(
 
 /**
  * Finalisasi penilaian instrumen (Kepala Sekolah).
+ * Nilai terkini dari layar ikut dikirim form sehingga aksi ini
+ * menyimpan dulu (seperti draft) lalu memfinalisasi — pengguna tidak
+ * wajib klik "Simpan Draft" sebelum "Selesaikan Penilaian".
  * Ditolak bila ada aspek tanpa skor 1-4.
  */
 export async function finalizeInstrumentAction(
@@ -241,10 +245,28 @@ export async function finalizeInstrumentAction(
 
   const parsed = finalizeInstrumentSchema.safeParse({
     supervisionId: formData.get("supervisionId"),
+    className: formData.get("className"),
+    evaluation: formData.get("evaluation"),
+    itemsJson: formData.get("itemsJson"),
   });
   if (!parsed.success) return fail(firstInstrumentIssue(parsed.error));
 
   try {
+    // Simpan nilai yang tampil di layar terlebih dahulu agar finalisasi
+    // membaca data terbaru, bukan draft lama di database.
+    if (parsed.data.itemsJson.length > 0) {
+      await saveInstrumentDraft({
+        supervisionId: parsed.data.supervisionId,
+        className: parsed.data.className,
+        evaluation: parsed.data.evaluation,
+        items: parsed.data.itemsJson.map((item) => ({
+          docType: item.docType as SupervisionDocType,
+          present: item.present,
+          score: item.score,
+          note: item.note,
+        })),
+      });
+    }
     const assessment = await finalizeInstrumentAssessment(
       parsed.data.supervisionId
     );
@@ -269,4 +291,69 @@ export async function finalizeInstrumentAction(
   revalidatePath("/supervision");
   revalidatePath(`/supervision/${parsed.data.supervisionId}`);
   return succeed();
+}
+
+export type SyncCompetencyState = {
+  ok: boolean;
+  error: string | null;
+  message: string | null;
+};
+
+/**
+ * Kirim (ulang) skor instrumen final ke profil guru (Kepala Sekolah).
+ * Dipakai untuk supervisi yang diselesaikan sebelum jembatan otomatis
+ * ada, atau bila pengiriman otomatis saat finalisasi gagal diam-diam.
+ * Hasilnya eksplisit: jumlah dan rincian skor yang terkirim.
+ */
+export async function syncSupervisionCompetenciesAction(
+  _prev: SyncCompetencyState,
+  formData: FormData
+): Promise<SyncCompetencyState> {
+  const gate = await requireSupervisionMutation();
+  if (!gate.user)
+    return { ok: false, error: gate.error, message: null };
+
+  const id = formData.get("supervisionId");
+  if (typeof id !== "string" || !id)
+    return { ok: false, error: "Supervisi tidak valid", message: null };
+
+  try {
+    const { teacherId, synced } = await syncSupervisionToCompetencies(id);
+
+    await logAuditEvent({
+      action: "sync",
+      entity: "teacher_competencies",
+      entityId: teacherId,
+      newData: {
+        supervision_id: id,
+        synced: synced.map((s) => `${s.competency}: ${s.score}`),
+      },
+    });
+
+    const detail = synced
+      .map(
+        (s) =>
+          `${s.competency} ${s.score.toLocaleString("id-ID", {
+            maximumFractionDigits: 2,
+          })}`
+      )
+      .join(", ");
+    revalidatePath("/supervision");
+    revalidatePath(`/supervision/${id}`);
+    revalidatePath(`/teachers/${teacherId}`);
+    revalidatePath("/growth");
+    return {
+      ok: true,
+      error: null,
+      message: `${synced.length} skor terkirim ke profil guru — ${detail}.`,
+    };
+  } catch (error) {
+    console.error("syncSupervisionCompetenciesAction error:", error);
+    return {
+      ok: false,
+      error:
+        error instanceof Error ? error.message : "Gagal mengirim ke profil guru",
+      message: null,
+    };
+  }
 }

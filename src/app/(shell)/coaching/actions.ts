@@ -21,6 +21,11 @@ import {
   updateCoachingActionSchema,
   updateSessionStatusSchema,
 } from "@/schemas/coaching";
+import {
+  uploadEvidenceFile,
+  serializeEvidence,
+  type EvidenceData,
+} from "@/services/coaching-evidence.service";
 
 export type CoachingActionState = {
   ok: boolean;
@@ -162,14 +167,20 @@ export async function addActionAction(
 
 /**
  * Update a follow-up action (status, evidence, result, notes).
+ * Guru boleh melaporkan tindak lanjut MILIKNYA (kepemilikan dicek di
+ * service); struktur sesi tetap milik Kepala Sekolah.
  * Sets completed_date automatically when marked completed.
+ *
+ * Support evidence types: text, link, or file upload.
  */
 export async function updateActionAction(
   _prev: CoachingActionState,
   formData: FormData
 ): Promise<CoachingActionState> {
-  const gate = await requireCoachMutation();
-  if (!gate.user) return fail(gate.error);
+  const user = await requireUser();
+  if (!user.schoolId) {
+    return fail("Akun Anda belum terhubung ke sekolah");
+  }
 
   const sessionId = formData.get("sessionId");
 
@@ -185,13 +196,62 @@ export async function updateActionAction(
     return fail(firstIssueMessage(parsed.error));
   }
 
+  // Bukti wajib saat menandai selesai — untuk guru maupun kepsek.
+  if (parsed.data.status === "completed" && !parsed.data.evidence) {
+    return fail("Isi Bukti penyelesaian sebelum menandai Selesai.");
+  }
+
+  let evidenceToSave: EvidenceData | undefined = parsed.data.evidence;
+
+  // Handle file upload if present
+  const evidenceFile = formData.get("evidenceFile");
+  if (
+    evidenceFile instanceof File &&
+    evidenceFile.size > 0 &&
+    parsed.data.evidence?.type === "file"
+  ) {
+    try {
+      const { filePath, fileName } = await uploadEvidenceFile(
+        parsed.data.actionId,
+        evidenceFile
+      );
+      evidenceToSave = {
+        type: "file",
+        value: filePath,
+        fileName: fileName,
+      };
+    } catch (error) {
+      return fail(
+        error instanceof Error
+          ? error.message
+          : "Gagal mengunggah file bukti"
+      );
+    }
+  }
+
+  // Auto-complete: jika guru mengirim bukti dan status masih
+  // pending/in_progress, otomatis tandai sebagai selesai.
+  let finalStatus = parsed.data.status;
+  if (
+    evidenceToSave &&
+    parsed.data.status !== "completed" &&
+    parsed.data.status !== "cancelled"
+  ) {
+    finalStatus = "completed";
+  }
+
   try {
+    let evidenceStr: string | undefined;
+    if (evidenceToSave) {
+      const serialized = await serializeEvidence(evidenceToSave);
+      evidenceStr = serialized ?? undefined;
+    }
     await updateCoachingAction(parsed.data.actionId, {
-      status: parsed.data.status,
-      evidence: parsed.data.evidence,
+      status: finalStatus,
+      evidence: evidenceStr,
       result: parsed.data.result,
       notes: parsed.data.notes,
-      ...(parsed.data.status === "completed"
+      ...(finalStatus === "completed"
         ? { completedDate: new Date().toISOString().split("T")[0] }
         : {}),
     });
@@ -200,13 +260,13 @@ export async function updateActionAction(
       action: "update",
       entity: "coaching_actions",
       entityId: parsed.data.actionId,
-      newData: { status: parsed.data.status },
+      newData: { status: finalStatus },
     });
 
     // Critical flow (AGENTS.md §31, §43): completing a follow-up
     // recalculates the teacher's growth snapshot from the database.
     // Growth failure must never break the follow-up completion itself.
-    if (parsed.data.status === "completed") {
+    if (finalStatus === "completed") {
       try {
         const sessionIdValue =
           typeof sessionId === "string" && sessionId ? sessionId : null;

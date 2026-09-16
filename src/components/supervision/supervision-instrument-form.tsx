@@ -423,6 +423,9 @@ export default function SupervisionInstrumentForm({
           </form>
           <form action={finalizeAction}>
             <input type="hidden" name="supervisionId" value={supervisionId} />
+            <input type="hidden" name="className" value={className} />
+            <input type="hidden" name="evaluation" value={evaluation} />
+            <input type="hidden" name="itemsJson" value={itemsJson} />
             <FinalizeButton />
           </form>
         </div>

@@ -14,6 +14,7 @@ import SupervisionStatusForm from "@/components/supervision/supervision-status-f
 import SupervisionDocuments from "@/components/supervision/supervision-documents";
 import SupervisionInstrumentForm from "@/components/supervision/supervision-instrument-form";
 import SupervisionInstrumentResult from "@/components/supervision/supervision-instrument-result";
+import { SyncCompetenciesButton } from "@/components/supervision/sync-competencies-button";
 import { Badge, PageHeader, Panel } from "@/components/common";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -242,7 +243,20 @@ export default async function SupervisionDetailPage({
       <Panel
         title="Penilaian Instrumen 12 Aspek"
         description="Ada/Tidak + skor 1–4 per aspek. Nilai = (jumlah skor/48) × 100."
+        action={
+          isLeader && instrument?.assessment.status === "final" ? (
+            <SyncCompetenciesButton supervisionId={supervision.id} />
+          ) : undefined
+        }
       >
+        {isLeader && instrument?.assessment.status === "final" && (
+          <p className="mb-4 rounded-md border border-sky-600/20 bg-sky-50 p-3 text-sm text-sky-800">
+            Penilaian final otomatis terkirim ke profil guru saat
+            diselesaikan. Gunakan tombol “Kirim ke Profil Guru” untuk
+            mengirim ulang — mis. supervisi ini diselesaikan sebelum fitur
+            otomatis ada, atau pengiriman sebelumnya gagal.
+          </p>
+        )}
         {isLeader ? (
           <div className="space-y-6">
             {instrument && instrument.assessment.status === "final" && (

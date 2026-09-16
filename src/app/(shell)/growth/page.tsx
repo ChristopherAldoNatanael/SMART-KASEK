@@ -1,8 +1,17 @@
 import Link from "next/link";
-import { AlertTriangle, LineChart, Sprout, Users } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowUpRight,
+  LineChart,
+  Sprout,
+  TrendingDown,
+  TrendingUp,
+  Users,
+} from "lucide-react";
 import { getCurrentUser } from "@/lib/auth";
 import { getSchoolGrowthOverview } from "@/services/growth.service";
 import { GrowthChart } from "@/components/charts/growth-chart";
+import { RecalculateGrowthButton } from "@/components/growth/recalculate-button";
 import {
   Empty,
   PageHeader,
@@ -22,8 +31,24 @@ const DIMENSIONS: { label: string; key: string }[] = [
   { label: "Kepribadian", key: "personality_score" },
   { label: "Digital", key: "digital_score" },
   { label: "Asesmen", key: "assessment_score" },
-  { label: "Manajemen Kelas", key: "classroom_score" },
+  { label: "Man. Kelas", key: "classroom_score" },
 ];
+
+function scoreColor(score: number | null): string {
+  if (score === null) return "text-muted-foreground";
+  if (score >= 85) return "text-emerald-700";
+  if (score >= 70) return "text-foreground";
+  if (score >= 60) return "text-amber-600";
+  return "text-rose-600";
+}
+
+function scoreBg(score: number | null): string {
+  if (score === null) return "bg-muted";
+  if (score >= 85) return "bg-emerald-500";
+  if (score >= 70) return "bg-brand";
+  if (score >= 60) return "bg-amber-500";
+  return "bg-rose-500";
+}
 
 export default async function GrowthPage() {
   const user = await getCurrentUser();
@@ -32,8 +57,9 @@ export default async function GrowthPage() {
     return (
       <div className="space-y-6">
         <PageHeader
+          eyebrow="Perkembangan"
           title="Teacher Growth"
-          description="Perkembangan guru berbasis riwayat snapshot"
+          description="Pantau perkembangan guru berdasarkan data kompetensi dan coaching."
         />
         <Empty
           icon={Sprout}
@@ -53,8 +79,9 @@ export default async function GrowthPage() {
     return (
       <div className="space-y-6">
         <PageHeader
+          eyebrow="Perkembangan"
           title="Teacher Growth"
-          description="Perkembangan guru berbasis riwayat snapshot"
+          description="Pantau perkembangan guru berdasarkan data kompetensi dan coaching."
         />
         <div
           role="alert"
@@ -71,8 +98,9 @@ export default async function GrowthPage() {
     return (
       <div className="space-y-6">
         <PageHeader
+          eyebrow="Perkembangan"
           title="Teacher Growth"
-          description="Perkembangan guru berbasis riwayat snapshot"
+          description="Pantau perkembangan guru berdasarkan data kompetensi dan coaching."
         />
         <Empty
           icon={Users}
@@ -92,7 +120,8 @@ export default async function GrowthPage() {
       <PageHeader
         eyebrow="Perkembangan"
         title="Teacher Growth"
-        description="Skor dihitung dari data kompetensi dan diperbarui otomatis setiap tindak lanjut coaching selesai."
+        description="Skor dihitung dari data kompetensi — otomatis saat supervisi diselesaikan, nilai diisi, atau tindak lanjut coaching selesai."
+        actions={<RecalculateGrowthButton />}
       />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -125,7 +154,7 @@ export default async function GrowthPage() {
         <Empty
           icon={Sprout}
           title="Belum ada snapshot perkembangan"
-          description="Lengkapi data kompetensi guru — snapshot periode berjalan dihitung otomatis setiap ada tindak lanjut coaching yang diselesaikan."
+          description="Isi nilai kompetensi di Data Guru atau selesaikan satu penilaian supervisi, lalu klik Hitung Ulang di atas — snapshot periode berjalan akan terisi otomatis dari data tersebut."
           actionHref="/teachers"
           actionLabel="Ke Data Guru"
         />
@@ -160,84 +189,96 @@ export default async function GrowthPage() {
               <Th className="text-right">Aksi</Th>
             </TableHead>
             <tbody>
-              {overview.teachers.map((t) => (
-                <tr
-                  key={t.teacherId}
-                  className="border-b transition-colors last:border-0 hover:bg-muted/40"
-                >
-                  <td className="px-4 py-3">
-                    <p className="font-medium leading-tight">{t.name}</p>
-                    {t.subject && (
-                      <p className="mt-0.5 text-xs text-muted-foreground">
-                        {t.subject}
-                      </p>
-                    )}
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
-                    {t.latest?.period ?? "—"}
-                  </td>
-                  <td className="tnum px-4 py-3 text-right text-lg font-bold">
-                    {t.latest?.overall_score ?? "—"}
-                  </td>
-                  <td className="px-4 py-3">
-                    {t.latest ? (
-                      <div className="min-w-44 space-y-1.5">
-                        {DIMENSIONS.map((d) => {
-                          const value =
-                            (t.latest?.[
-                              d.key as keyof typeof t.latest
-                            ] as number | null) ?? null;
-                          return (
-                            <div
-                              key={d.key}
-                              className="flex items-center gap-2"
-                            >
-                              <span className="w-28 shrink-0 text-xs text-muted-foreground">
-                                {d.label}
-                              </span>
-                              <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
-                                <span
-                                  className="block h-full rounded-full bg-brand"
-                                  style={{
-                                    width: `${Math.min(100, Math.max(0, value ?? 0))}%`,
-                                  }}
-                                />
-                              </span>
-                              <span className="tnum w-8 text-right text-xs font-medium">
-                                {value ?? "—"}
-                              </span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <span className="text-sm text-muted-foreground">
-                        Belum ada snapshot
+              {overview.teachers.map((t) => {
+                const overall = t.latest?.overall_score ?? null;
+                const isLow = overall !== null && overall < 70;
+                return (
+                  <tr
+                    key={t.teacherId}
+                    className={`border-b transition-colors last:border-0 hover:bg-muted/40 ${isLow ? "bg-rose-50/30" : ""}`}
+                  >
+                    <td className="px-4 py-3">
+                      <p className="font-medium leading-tight">{t.name}</p>
+                      {t.subject && (
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          {t.subject}
+                        </p>
+                      )}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
+                      {t.latest?.period ?? "—"}
+                    </td>
+                    <td className="tnum px-4 py-3 text-right">
+                      <span className={`text-lg font-bold ${scoreColor(overall)}`}>
+                        {overall ?? "—"}
                       </span>
-                    )}
-                  </td>
-                  <td className="tnum whitespace-nowrap px-4 py-3 text-right text-sm">
-                    {t.growth === null ? (
-                      <span className="text-muted-foreground">—</span>
-                    ) : (
-                      <span
-                        className={`font-semibold ${t.growth >= 0 ? "text-emerald-700" : "text-rose-600"}`}
+                    </td>
+                    <td className="px-4 py-3">
+                      {t.latest ? (
+                        <div className="min-w-44 space-y-1.5">
+                          {DIMENSIONS.map((d) => {
+                            const value =
+                              (t.latest?.[
+                                d.key as keyof typeof t.latest
+                              ] as number | null) ?? null;
+                            return (
+                              <div
+                                key={d.key}
+                                className="flex items-center gap-2"
+                              >
+                                <span className="w-24 shrink-0 text-xs text-muted-foreground">
+                                  {d.label}
+                                </span>
+                                <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+                                  <span
+                                    className={`block h-full rounded-full ${scoreBg(value)}`}
+                                    style={{
+                                      width: `${Math.min(100, Math.max(0, value ?? 0))}%`,
+                                    }}
+                                  />
+                                </span>
+                                <span className={`tnum w-8 text-right text-xs font-medium ${scoreColor(value)}`}>
+                                  {value ?? "—"}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <span className="text-sm text-muted-foreground">
+                          Belum ada snapshot
+                        </span>
+                      )}
+                    </td>
+                    <td className="tnum whitespace-nowrap px-4 py-3 text-right text-sm">
+                      {t.growth === null ? (
+                        <span className="text-muted-foreground">—</span>
+                      ) : (
+                        <span
+                          className={`inline-flex items-center gap-1 font-semibold ${t.growth >= 0 ? "text-emerald-700" : "text-rose-600"}`}
+                        >
+                          {t.growth >= 0 ? (
+                            <TrendingUp className="h-3.5 w-3.5" />
+                          ) : (
+                            <TrendingDown className="h-3.5 w-3.5" />
+                          )}
+                          {t.growth >= 0 ? "+" : ""}
+                          {t.growth}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <Link
+                        href={`/teachers/${t.teacherId}`}
+                        className="inline-flex items-center gap-1 font-medium text-brand hover:underline"
                       >
-                        {t.growth >= 0 ? "+" : ""}
-                        {t.growth}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <Link
-                      href={`/teachers/${t.teacherId}`}
-                      className="font-medium text-brand hover:underline"
-                    >
-                      Profil
-                    </Link>
-                  </td>
-                </tr>
-              ))}
+                        Profil
+                        <ArrowUpRight className="h-3.5 w-3.5" />
+                      </Link>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </TableShell>
         </>

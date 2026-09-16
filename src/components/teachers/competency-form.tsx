@@ -17,15 +17,6 @@ export type CompetencyOption = {
 const inputClass =
   "w-full rounded-md border bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
-const SOURCE_LABELS: Record<string, string> = {
-  supervision: "Supervisi",
-  self_assessment: "Penilaian Diri",
-  coaching: "Coaching",
-  assessment: "Asesmen",
-  manual: "Manual",
-  ai: "AI",
-};
-
 function SubmitButton({
   label = "Simpan Nilai",
   pendingLabel = "Menyimpan…",
@@ -99,7 +90,7 @@ export default function CompetencyForm({
           Nilai tersimpan — profil perkembangan diperbarui.
         </div>
       )}
-      <div className="grid gap-3 sm:grid-cols-[1fr_120px_150px]">
+      <div className="grid gap-3 sm:grid-cols-[1fr_120px]">
         <div className="space-y-1.5">
           <label htmlFor="competencyId" className="text-xs font-medium text-muted-foreground">
             Kompetensi
@@ -128,19 +119,31 @@ export default function CompetencyForm({
             className={`${inputClass} tnum`}
           />
         </div>
-        <div className="space-y-1.5">
-          <label htmlFor="source" className="text-xs font-medium text-muted-foreground">
-            Sumber
-          </label>
-          <select id="source" name="source" defaultValue="manual" className={inputClass}>
-            {Object.entries(SOURCE_LABELS).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </div>
       </div>
+      <div className="space-y-1.5">
+        <label htmlFor="competency-notes" className="text-xs font-medium text-muted-foreground">
+          Dasar penilaian / bukti <span className="text-destructive">*</span>
+        </label>
+        <textarea
+          id="competency-notes"
+          name="notes"
+          required
+          minLength={10}
+          maxLength={2000}
+          rows={3}
+          placeholder="mis. Observasi kelas 12 Sep 2026: membuka dengan apersepsi, memakai LKPD kelompok, menutup dengan refleksi. Bukti: foto papan tulis + LKPD."
+          className={inputClass}
+        />
+        <p className="text-xs text-muted-foreground">
+          Wajib diisi (min. 10 karakter) — setiap skor harus bisa
+          dipertanggungjawabkan: kapan diobservasi dan bukti apa yang dilihat.
+        </p>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Tersimpan sebagai sumber “Penilaian Kepala Sekolah”. Skor dari
+        Supervisi, Coaching, Asesmen, atau Penilaian Diri hanya dibuat sistem
+        dari aktivitas tercatat dan tampil otomatis di daftar atas.
+      </p>
       <SubmitButton />
     </form>
   );

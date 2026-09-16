@@ -8,11 +8,13 @@ import {
   gradeForValue,
   isValidInstrumentScore,
   INSTRUMENT_ASPECTS,
+  INSTRUMENT_MAX_PER_ASPECT,
   totalInstrumentScore,
   type InstrumentItemInput,
   type InstrumentStatus,
 } from "@/lib/supervision-instrument";
 import { SUPERVISION_DOC_TYPES } from "@/lib/supervision-docs";
+import { recalculateTeacherGrowth } from "./growth.service";
 import type { Database } from "@/types/database";
 
 type InstrumentAssessment =
@@ -262,5 +264,171 @@ export async function finalizeInstrumentAssessment(
     .eq("id", supervisionId);
   if (syncError) throw new Error(syncError.message);
 
+  // Jembatan supervisi → profil guru. Best-effort: kegagalan
+  // jembatan tidak menggagalkan finalisasi (dicatat di console).
+  try {
+    await syncSupervisionToCompetencies(supervisionId);
+  } catch (bridgeError) {
+    console.error("finalize bridge supervision→growth error:", bridgeError);
+  }
+
   return data as InstrumentAssessment;
+}
+
+export type SupervisionCompetencySync = {
+  competency: string;
+  score: number;
+};
+
+/**
+ * Kirim skor instrumen final sebuah supervisi ke profil guru:
+ * dicatat sebagai skor kompetensi (sumber 'supervision') lalu
+ * snapshot perkembangan dihitung ulang.
+ *
+ * Pemetaan aspek → dimensi (asumsi didokumentasikan, AGENTS.md §45):
+ * - Pedagogik ← rata-rata aspek perencanaan (CP, ATP, Prota,
+ *   Promes, Modul Ajar, Kokurikuler)
+ * - Asesmen ← rata-rata aspek penilaian (Kisi-kisi/Soal/Analisis,
+ *   Daftar Nilai)
+ * - Manajemen Kelas ← rata-rata aspek administrasi kelas
+ *   (Daftar Hadir, Jurnal, Kalender, Jadwal)
+ * - Profesional ← nilai overall instrumen
+ * Skor aspek 1–4 dikonversi ke 0–100 (rata-rata/4×100).
+ *
+ * Strict (melempar Error dengan pesan jelas): dipakai tombol
+ * "Kirim ke Profil Guru" agar kegagalan terlihat pengguna, dan
+ * dipakai best-effort oleh finalizeInstrumentAssessment.
+ */
+export async function syncSupervisionToCompetencies(
+  supervisionId: string
+): Promise<{ teacherId: string; synced: SupervisionCompetencySync[] }> {
+  const { evaluatorId } = await assertLeader();
+  const scope = await resolveScope(supervisionId);
+  if (!scope) throw new Error("Supervisi tidak ditemukan");
+
+  const supabase = await createClient();
+  const { data: assessment } = await supabase
+    .from("supervision_instrument_assessments")
+    .select("*")
+    .eq("supervision_id", supervisionId)
+    .maybeSingle();
+  if (!assessment) {
+    throw new Error("Belum ada penilaian instrumen untuk supervisi ini.");
+  }
+  if (assessment.status !== "final") {
+    throw new Error("Selesaikan penilaian instrumen terlebih dahulu.");
+  }
+
+  const { data: items, error: itemsError } = await supabase
+    .from("supervision_instrument_items")
+    .select("doc_type, score")
+    .eq("assessment_id", assessment.id);
+  if (itemsError) throw new Error(itemsError.message);
+
+  const byType = new Map((items ?? []).map((i) => [i.doc_type, i.score]));
+  const missing = INSTRUMENT_ASPECTS.filter(
+    (a) => !isValidInstrumentScore(byType.get(a.docType))
+  ).map((a) => a.label);
+  if (missing.length > 0) {
+    throw new Error(`Aspek belum lengkap: ${missing.join(", ")}`);
+  }
+
+  const labelByType = new Map(
+    INSTRUMENT_ASPECTS.map((a) => [a.docType, a.label])
+  );
+  const aspectAvg100 = (types: string[]): number | null => {
+    const scores = types
+      .map((t) => byType.get(t))
+      .filter(isValidInstrumentScore);
+    if (scores.length === 0) return null;
+    const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
+    return Math.round((avg / INSTRUMENT_MAX_PER_ASPECT) * 100 * 100) / 100;
+  };
+
+  const overall =
+    assessment.final_value ?? calcInstrumentValue(totalInstrumentScore(items ?? []));
+
+  const bridges: { keyword: string; score: number | null; detail: string }[] = [
+    {
+      keyword: "pedagog",
+      score: aspectAvg100([
+        "cp",
+        "atp",
+        "prota",
+        "promes",
+        "modul_ajar",
+        "kokurikuler",
+      ]),
+      detail:
+        "aspek perencanaan (CP, ATP, Prota, Promes, Modul Ajar, Kokurikuler)",
+    },
+    {
+      keyword: "asesmen",
+      score: aspectAvg100(["penilaian", "daftar_nilai"]),
+      detail: "aspek penilaian (Kisi-kisi/Soal/Analisis, Daftar Nilai)",
+    },
+    {
+      keyword: "kelas",
+      score: aspectAvg100(["daftar_hadir", "jurnal", "kalender", "jadwal"]),
+      detail:
+        "aspek administrasi kelas (Daftar Hadir, Jurnal, Kalender, Jadwal)",
+    },
+    {
+      keyword: "profesional",
+      score: overall,
+      detail: "nilai overall instrumen",
+    },
+  ];
+
+  const { data: masters } = await supabase
+    .from("competencies")
+    .select("id, name")
+    .eq("is_active", true);
+  if (!masters || masters.length === 0) {
+    throw new Error(
+      "Master kompetensi kosong — jalankan migrasi 00020_master_competencies di database, lalu kirim ulang."
+    );
+  }
+
+  const { data: supervision } = await supabase
+    .from("supervisions")
+    .select("teacher_id, supervision_date")
+    .eq("id", supervisionId)
+    .single();
+  if (!supervision) throw new Error("Supervisi tidak ditemukan");
+
+  const aspectScores = (items ?? [])
+    .map((i) => `${labelByType.get(i.doc_type) ?? i.doc_type}: ${i.score}`)
+    .join(", ");
+
+  const synced: SupervisionCompetencySync[] = [];
+  for (const bridge of bridges) {
+    if (bridge.score === null || !Number.isFinite(bridge.score)) continue;
+    const master = masters.find((m) =>
+      m.name.toLowerCase().includes(bridge.keyword)
+    );
+    if (!master) continue;
+    const { error: bridgeError } = await supabase
+      .from("teacher_competencies")
+      .insert({
+        teacher_id: supervision.teacher_id,
+        competency_id: master.id,
+        score: bridge.score,
+        source: "supervision",
+        assessed_by: evaluatorId,
+        notes: `Hasil instrumen supervisi ${supervision.supervision_date} — ${bridge.detail}. Rincian aspek: ${aspectScores}.`,
+      });
+    if (bridgeError) throw new Error(bridgeError.message);
+    synced.push({ competency: master.name, score: bridge.score });
+  }
+
+  if (synced.length === 0) {
+    throw new Error(
+      "Tidak ada dimensi yang cocok dengan master kompetensi di database."
+    );
+  }
+
+  await recalculateTeacherGrowth(supervision.teacher_id);
+
+  return { teacherId: supervision.teacher_id, synced };
 }

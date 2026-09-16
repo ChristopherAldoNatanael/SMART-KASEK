@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { ArrowLeft, School, ShieldAlert, Users } from "lucide-react";
+import { redirect } from "next/navigation";
+import { ArrowLeft, School, Users } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth";
 import { hasRole } from "@/lib/permissions";
 import { getTeachers } from "@/services/teacher.service";
@@ -21,6 +22,12 @@ export default async function NewCoachingPage({
   ]);
 
   const canMutate = user !== null && hasRole(user.role, "principal");
+
+  // Halaman ini khusus Kepala Sekolah. Guru tidak punya alur di sini —
+  // kembalikan ke daftar agar tidak mentok di halaman buntu.
+  if (user?.schoolId && !canMutate) {
+    redirect("/coaching");
+  }
 
   const params = await searchParams;
   const requestedTeacherId = params?.teacherId;
@@ -57,12 +64,6 @@ export default async function NewCoachingPage({
           description="Selesaikan penyiapan akun Anda terlebih dahulu."
           actionHref="/onboarding"
           actionLabel="Buka Halaman Penyiapan"
-        />
-      ) : !canMutate ? (
-        <Empty
-          icon={ShieldAlert}
-          title="Akses terbatas"
-          description="Hanya Kepala Sekolah yang dapat membuat sesi coaching."
         />
       ) : teachers.length === 0 ? (
         <Empty

@@ -132,6 +132,7 @@ export async function getTeacherCompetencySummary(
     weight: number;
     latestScore: number | null;
     assessedAt: string | null;
+    source: string | null;
   }[]
 > {
   const user = await requirePrincipal();
@@ -157,7 +158,7 @@ export async function getTeacherCompetencySummary(
     competencies.map(async (competency) => {
       const { data } = await supabase
         .from("teacher_competencies")
-        .select("score, assessed_at")
+        .select("score, assessed_at, source")
         .eq("teacher_id", teacherId)
         .eq("competency_id", competency.id)
         .order("assessed_at", { ascending: false })
@@ -171,6 +172,7 @@ export async function getTeacherCompetencySummary(
         weight: competency.weight,
         latestScore: data?.score ?? null,
         assessedAt: data?.assessed_at ?? null,
+        source: data?.source ?? null,
       };
     })
   );

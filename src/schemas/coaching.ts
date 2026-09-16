@@ -100,10 +100,35 @@ export const addCoachingActionSchema = z.object({
 
 export type AddCoachingActionInput = z.infer<typeof addCoachingActionSchema>;
 
+/**
+ * Evidence bisa berupa teks, link (Google Drive, dll), atau file upload.
+ * Format JSON: { "type": "text"|"link"|"file", "value": string, "fileName"?: string }
+ */
+const evidenceSchema = z.preprocess(
+  (v) => {
+    if (v == null || v === "") return undefined;
+    if (typeof v === "string") {
+      try {
+        return JSON.parse(v);
+      } catch {
+        return { type: "text", value: v };
+      }
+    }
+    return v;
+  },
+  z
+    .object({
+      type: z.enum(["text", "link", "file"]),
+      value: z.string().trim().min(1, "Bukti wajib diisi").max(5000),
+      fileName: z.string().trim().max(255).optional(),
+    })
+    .optional()
+);
+
 export const updateCoachingActionSchema = z.object({
   actionId: z.string().uuid("Tindak lanjut tidak valid"),
   status: z.enum(ACTION_STATUSES),
-  evidence: optionalText(2000),
+  evidence: evidenceSchema,
   result: optionalText(2000),
   notes: optionalText(2000),
 });

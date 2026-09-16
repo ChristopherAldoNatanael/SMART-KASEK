@@ -46,6 +46,10 @@ export const saveInstrumentDraftSchema = z.object({
 
 export const finalizeInstrumentSchema = z.object({
   supervisionId: z.string().regex(UUID_RE, "Supervisi tidak valid"),
+  className: optionalText(50),
+  evaluation: optionalText(5000),
+  /** Nilai terkini dari layar — bila ada, disimpan dulu sebelum finalisasi. */
+  itemsJson: itemsJsonSchema.optional().default([]),
 });
 
 export function firstIssueMessage(error: z.ZodError): string {

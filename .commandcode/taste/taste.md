@@ -17,3 +17,18 @@
 - Scope discipline: do not modify unrelated spec files, do not implement features ahead of the agreed phase. Confidence: 0.75
 - Concise reporting: provide only the requested structured sections, no unnecessary explanations or elaboration. Confidence: 0.8
 - Conservative database migrations: do not modify schema unless a migration error requires it; make the smallest safe change and explain it. Confidence: 0.8
+- Role-based flow analysis: when analyzing or designing application flows, always present from the perspective of each user role (e.g., principal vs teacher) rather than a single generic flow. Confidence: 0.85
+- Domain context: building an Indonesian school management system (SMART KASEK) — features relate to principal supervision, teacher coaching, and educational workflows. Confidence: 0.8
+- Evidence is mandatory before a coaching action can be marked "completed" (must be enforced for both teacher and principal). Confidence: 0.9
+- Evidence input supports three modes: plain text, link (e.g., Google Drive URL), or file upload — user can choose per submission. Confidence: 0.9
+- Common office document formats (DOC, DOCX, XLS, XLSX, PPT, PPTX) plus images and plain text must be supported for evidence file uploads. Confidence: 0.85
+- File upload validation must check both MIME type AND file extension — browsers send inconsistent MIME types, so extension-based fallback is required. Confidence: 0.85
+- Role-based evidence display: principals can view/download evidence files/links that teachers submitted, shown differently from the teacher's input form. Confidence: 0.85
+- UI differentiation between roles should be subtle and professional — different labels/context per role but same underlying layout and flow. Explicitly says "jangan kelihatan AI generate" (don't look AI-generated) and "jangan membuat flow yang membingungkan" (don't create confusing flows). Confidence: 0.9
+- Coaching and supervision flows must remain separate — coaching improvements must not modify supervision flow or data. Confidence: 0.8
+- Workflow automation preference: when a user submits evidence/proof for a coaching action, the system should auto-progress the status (e.g., to "completed") rather than requiring a separate manual status change. The user was confused/frustrated when progress stayed at 0% despite evidence being uploaded. Confidence: 0.85
+- Strongly anti-AI-slop in code: explicitly frustrated when "semua file bentuknya sama persis semua gada beda sama ai generate slop" (all files look identical, no different from AI-generated slop). Wants each page/component to feel unique and hand-crafted, not cookie-cutter templates. Confidence: 0.95
+- Wants full visibility into all files and changes made — not just summaries. Explicitly requested to see every server action, every file created/modified, with full code contents. They get frustrated when changes are made silently without showing the full picture. Confidence: 0.9
+- When making edits, explain every change in detail — which file, what changed, why. Do not just show diffs of new code; explain the full context. Confidence: 0.85
+- Prefers variety in page structure — when implementing multiple pages, do not use the same format/template for every page. Each page should have distinct structure appropriate to its purpose. "tolong buat yang berbeda beda dong masa tiap halaman formatnya sama semua". Confidence: 0.9
+- Toast/notification messages must be consistent across all pages — same wording style and tone. Keep wording simple and not overly complex ("kata kata nya jangan terlalu ribet semua"). User explicitly wants notifications to match the style established in coaching pages. Confidence: 0.85

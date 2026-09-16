@@ -307,14 +307,21 @@ export async function deleteCoachingSession(id: string): Promise<void> {
     throw new Error("Sesi coaching tidak ditemukan");
   }
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("coaching_sessions")
     .delete()
     .eq("id", id)
-    .eq("school_id", user.schoolId);
+    .eq("school_id", user.schoolId)
+    .select("id");
 
   if (error) {
     throw new Error(error.message);
+  }
+
+  if (!data || data.length === 0) {
+    throw new Error(
+      "Sesi coaching tidak terhapus (akses ditolak RLS atau data tidak ditemukan)"
+    );
   }
 }
 
@@ -365,6 +372,9 @@ export async function addCoachingAction(input: {
 
 /**
  * Update a coaching action.
+ * Principal/admin: semua field. Guru: hanya tindak lanjut miliknya
+ * (status tanpa cancelled, bukti, hasil, catatan) — teks tindakan dan
+ * target milik kesepakatan coach sehingga tidak bisa diubah guru.
  */
 export async function updateCoachingAction(
   id: string,
@@ -386,7 +396,7 @@ export async function updateCoachingAction(
   // Verify the action belongs to a session in the user's school.
   const { data: existing } = await supabase
     .from("coaching_actions")
-    .select("id, session:coaching_sessions!inner(school_id)")
+    .select("id, session:coaching_sessions!inner(school_id, teacher_id)")
     .eq("id", id)
     .single();
 
@@ -396,14 +406,31 @@ export async function updateCoachingAction(
 
   const session = existing.session as unknown as {
     school_id: string;
+    teacher_id: string;
   } | null;
   if (!session || session.school_id !== user.schoolId) {
     throw new Error("Tindak lanjut tidak ditemukan");
   }
 
+  const isLeader = user.role === "principal" || user.role === "admin";
+  if (!isLeader) {
+    if (user.role !== "teacher") {
+      throw new Error("Anda tidak berhak mengubah tindak lanjut ini");
+    }
+    const ownId = await getOwnTeacherId(user.id, user.schoolId);
+    if (!ownId || ownId !== session.teacher_id) {
+      throw new Error("Anda hanya dapat melaporkan tindak lanjut milik Anda");
+    }
+    if (input.status !== undefined && input.status === "cancelled") {
+      throw new Error("Pembatalan tindak lanjut oleh Kepala Sekolah");
+    }
+  }
+
   const updateData: CoachingActionUpdate = {};
-  if (input.action !== undefined) updateData.action = input.action;
-  if (input.targetDate !== undefined) updateData.target_date = input.targetDate;
+  if (isLeader) {
+    if (input.action !== undefined) updateData.action = input.action;
+    if (input.targetDate !== undefined) updateData.target_date = input.targetDate;
+  }
   if (input.completedDate !== undefined)
     updateData.completed_date = input.completedDate;
   if (input.status !== undefined) updateData.status = input.status;

@@ -319,14 +319,21 @@ export async function deleteSupervision(id: string): Promise<void> {
     .select("file_path")
     .eq("supervision_id", id);
 
-  const { error } = await supabase
+  const { data: deleted, error } = await supabase
     .from("supervisions")
     .delete()
     .eq("id", id)
-    .eq("school_id", user.schoolId);
+    .eq("school_id", user.schoolId)
+    .select("id");
 
   if (error) {
     throw new Error(error.message);
+  }
+
+  if (!deleted || deleted.length === 0) {
+    throw new Error(
+      "Supervisi tidak terhapus (akses ditolak RLS atau data tidak ditemukan)"
+    );
   }
 
   // Bersihkan berkas Storage (best effort, DB sudah cascade).
