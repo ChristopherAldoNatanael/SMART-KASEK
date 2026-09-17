@@ -2,10 +2,7 @@ import Link from "next/link";
 import { ClipboardList, Plus } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth";
 import { hasRole } from "@/lib/permissions";
-import {
-  getSupervisions,
-  getSupervisionStats,
-} from "@/services/supervision.service";
+import { getSupervisions } from "@/services/supervision.service";
 import {
   Badge,
   Empty,
@@ -32,14 +29,19 @@ const STATUS_TONES: Record<string, "neutral" | "success" | "warning" | "info"> =
 };
 
 export default async function SupervisionPage() {
-  const [supervisions, stats, user] = await Promise.all([
+  const [allSupervisions, user] = await Promise.all([
     getSupervisions(),
-    getSupervisionStats(),
     getCurrentUser(),
   ]);
   const isLeader =
     user !== null && hasRole(user.role, "principal");
   const isTeacher = user?.role === "teacher";
+  // Halaman ini khusus Supervisi Akademik. Baris manajerial (kind='managerial')
+  // tampil di /supervision/manajerial. Filter di sini (bukan service) agar
+  // tetap aman bila migrasi 00022 belum dijalankan (kind undefined = akademik).
+  const supervisions = allSupervisions.filter(
+    (s) => (s as { kind?: string | null }).kind !== "managerial"
+  );
 
   return (
     <div className="space-y-6">
@@ -64,17 +66,53 @@ export default async function SupervisionPage() {
         }
       />
 
+      <nav
+        aria-label="Jenis supervisi"
+        className="inline-flex rounded-lg border bg-card p-1 text-sm font-medium"
+      >
+        <span
+          aria-current="page"
+          className="rounded-md bg-primary px-3 py-1.5 text-primary-foreground"
+        >
+          Akademik
+        </span>
+        <Link
+          href="/supervision/manajerial"
+          className="rounded-md px-3 py-1.5 text-muted-foreground transition-colors hover:text-foreground"
+        >
+          Manajerial
+        </Link>
+      </nav>
+
       <div className="flex flex-wrap items-center gap-x-8 gap-y-3 rounded-xl border bg-card px-5 py-4 text-sm shadow-[0_1px_2px_rgba(16,24,40,0.05)]">
-        {[
-          { label: "Total", value: stats.total },
-          { label: "Draft", value: stats.draft },
-          { label: "Selesai", value: stats.completed },
-          { label: "Tindak Lanjut", value: stats.followUp },
-          {
-            label: "Rata-rata Nilai",
-            value: stats.averageScore ?? "—",
-          },
-        ].map((s) => (
+        {(() => {
+          // Statistik khusus akademik (selaras dengan daftar yang difilter).
+          const academic = supervisions;
+          const scores = academic
+            .map((s) => s.overall_score)
+            .filter((v): v is number => typeof v === "number");
+          const avg =
+            scores.length > 0
+              ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 100) /
+                100
+              : null;
+          return [
+            { label: "Total", value: academic.length },
+            {
+              label: "Draft",
+              value: academic.filter((s) => s.status === "draft").length,
+            },
+            {
+              label: "Selesai",
+              value: academic.filter((s) => s.status === "completed").length,
+            },
+            {
+              label: "Tindak Lanjut",
+              value: academic.filter((s) => s.status === "follow_up").length,
+            },
+            { label: "Rata-rata Nilai", value: avg ?? "—" },
+          ];
+        })().map((s) => (
           <div key={s.label} className="flex items-baseline gap-2">
             <span className="text-muted-foreground">{s.label}</span>
             <span className="tnum text-lg font-bold">{s.value}</span>

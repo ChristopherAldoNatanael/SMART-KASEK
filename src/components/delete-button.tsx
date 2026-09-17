@@ -1,36 +1,60 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import { useFormState, useFormStatus } from "react-dom";
+import { ConfirmDialog } from "./confirm-dialog";
+import { toast } from "./toaster";
 
 export type DeleteState = { ok: boolean; error: string | null };
 
-function ConfirmSubmitButton({
+function DeleteTrigger({
   label,
-  pendingLabel,
-  confirmText,
+  dialogTitle,
+  dialogDescription,
 }: {
   label: string;
-  pendingLabel: string;
-  confirmText: string;
+  dialogTitle: string;
+  dialogDescription: string;
 }) {
   const { pending } = useFormStatus();
+  const [open, setOpen] = useState(false);
+  const formRef = useRef<HTMLFormElement | null>(null);
+
   return (
-    <button
-      type="submit"
-      disabled={pending}
-      onClick={(e) => {
-        if (!window.confirm(confirmText)) e.preventDefault();
-      }}
-      className="text-sm font-medium text-destructive hover:underline disabled:opacity-50"
-    >
-      {pending ? pendingLabel : label}
-    </button>
+    <>
+      <button
+        type="submit"
+        disabled={pending}
+        onClick={(e) => {
+          e.preventDefault();
+          formRef.current = e.currentTarget.form;
+          setOpen(true);
+        }}
+        className="min-h-[44px] px-2 py-2 text-sm font-medium text-destructive hover:underline disabled:opacity-50"
+      >
+        {pending ? "Menghapus..." : label}
+      </button>
+      <ConfirmDialog
+        open={open}
+        title={dialogTitle}
+        description={dialogDescription}
+        confirmLabel="Hapus"
+        cancelLabel="Batal"
+        tone="danger"
+        onCancel={() => setOpen(false)}
+        onConfirm={() => {
+          setOpen(false);
+          formRef.current?.requestSubmit();
+        }}
+      />
+    </>
   );
 }
 
 /**
  * Generic delete button wired to a server action.
- * Renders nothing on success (caller should redirect or revalidate away).
+ * Konfirmasi memakai dialog ramah dalam aplikasi (bukan popup browser),
+ * kegagalan tampil sebagai toast. API tidak berubah.
  */
 export default function DeleteButton({
   action,
@@ -53,21 +77,26 @@ export default function DeleteButton({
     error: null,
   });
 
+  const last = useRef(state);
+  useEffect(() => {
+    if (last.current !== state) {
+      last.current = state;
+      if (state.error) {
+        toast.error("Belum berhasil menghapus", state.error);
+      }
+    }
+  });
+
   return (
     <span className="inline-flex flex-col items-end gap-1">
       <form action={formAction}>
         <input type="hidden" name={idName} value={idValue} />
-        <ConfirmSubmitButton
+        <DeleteTrigger
           label={label}
-          pendingLabel="Menghapus…"
-          confirmText={confirmText}
+          dialogTitle={`${label} data ini`}
+          dialogDescription={`${confirmText}\n\nData yang sudah dihapus tidak dapat dikembalikan.`}
         />
       </form>
-      {state.error && (
-        <span role="alert" className="text-xs text-destructive">
-          {state.error}
-        </span>
-      )}
     </span>
   );
 }
