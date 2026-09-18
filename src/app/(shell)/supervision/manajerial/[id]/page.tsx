@@ -163,8 +163,7 @@ export default async function ManagerialSupervisionDetailPage({
           ) : (
             <p className="text-[15px] leading-relaxed text-muted-foreground">
               Hasil penilaian akan muncul di sini setelah Kepala Sekolah
-              selesai menilai ketiga instrumen. Silakan kembali lagi nanti,
-              Bu/Pak.
+              selesai menilai ketiga instrumen. Silakan kembali lagi nanti.
             </p>
           )}
         </Panel>
@@ -193,7 +192,7 @@ export default async function ManagerialSupervisionDetailPage({
             />
           ) : (
             <p className="text-[15px] leading-relaxed text-muted-foreground">
-              Bagian ini diisi oleh Kepala Sekolah, Bu/Pak. Hasilnya bisa
+              Bagian ini diisi oleh Kepala Sekolah. Hasilnya bisa
               dilihat pada bagian Hasil di atas setelah selesai.
             </p>
           )}
@@ -220,7 +219,7 @@ export default async function ManagerialSupervisionDetailPage({
             />
           ) : (
             <p className="text-[15px] leading-relaxed text-muted-foreground">
-              Bagian ini diisi oleh Kepala Sekolah, Bu/Pak. Hasilnya bisa
+              Bagian ini diisi oleh Kepala Sekolah. Hasilnya bisa
               dilihat pada bagian Hasil di atas setelah selesai.
             </p>
           )}
@@ -250,7 +249,7 @@ export default async function ManagerialSupervisionDetailPage({
             />
           ) : (
             <p className="text-[15px] leading-relaxed text-muted-foreground">
-              Bagian ini diisi oleh Kepala Sekolah, Bu/Pak. Hasilnya bisa
+              Bagian ini diisi oleh Kepala Sekolah. Hasilnya bisa
               dilihat pada bagian Hasil di atas setelah selesai.
             </p>
           )}
@@ -262,7 +261,7 @@ export default async function ManagerialSupervisionDetailPage({
         description={
           isLeader
             ? "Tulis temuan, catatan, dan rencana perbaikan untuk guru. Kalau perlu pendampingan lanjutan, tekan tombol Buat Coaching di atas."
-            : "Catatan dari Kepala Sekolah dan rencana tindak lanjutnya, Bu/Pak."
+            : "Catatan dari Kepala Sekolah dan rencana tindak lanjutnya."
         }
       >
         {isLeader ? (

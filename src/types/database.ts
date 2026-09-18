@@ -884,6 +884,7 @@ export interface Database {
           class_name: string | null;
           gender: StudentGender | null;
           status: StudentStatus;
+          academic_year: string | null;
           created_at: string;
         };
         Insert: {
@@ -894,6 +895,7 @@ export interface Database {
           class_name?: string | null;
           gender?: StudentGender | null;
           status?: StudentStatus;
+          academic_year?: string | null;
           created_at?: string;
         };
         Update: {
@@ -904,6 +906,94 @@ export interface Database {
           class_name?: string | null;
           gender?: StudentGender | null;
           status?: StudentStatus;
+          academic_year?: string | null;
+          created_at?: string;
+        };
+      };
+      class_attendance: {
+        Row: {
+          id: string;
+          school_id: string;
+          student_id: string;
+          class_name: string | null;
+          academic_year: string | null;
+          date: string;
+          status: string;
+          recorded_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          school_id: string;
+          student_id: string;
+          class_name?: string | null;
+          academic_year?: string | null;
+          date: string;
+          status?: string;
+          recorded_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          school_id?: string;
+          student_id?: string;
+          class_name?: string | null;
+          academic_year?: string | null;
+          date?: string;
+          status?: string;
+          recorded_by?: string | null;
+          created_at?: string;
+        };
+      };
+      school_classes: {
+        Row: {
+          id: string;
+          school_id: string;
+          name: string;
+          is_active: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          school_id: string;
+          name: string;
+          is_active?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          school_id?: string;
+          name?: string;
+          is_active?: boolean;
+          created_at?: string;
+        };
+      };
+      teaching_assignments: {
+        Row: {
+          id: string;
+          school_id: string;
+          teacher_id: string;
+          class_name: string;
+          subject: string;
+          academic_year: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          school_id: string;
+          teacher_id: string;
+          class_name: string;
+          subject: string;
+          academic_year: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          school_id?: string;
+          teacher_id?: string;
+          class_name?: string;
+          subject?: string;
+          academic_year?: string;
           created_at?: string;
         };
       };

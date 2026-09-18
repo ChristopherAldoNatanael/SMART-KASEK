@@ -63,7 +63,7 @@ export default function ManagerialFollowUpForm({
       } else if (state.ok) {
         toast.success(
           "Catatan sudah tersimpan",
-          "Temuan dan tindak lanjut Bapak/Ibu aman tersimpan."
+          "Temuan dan tindak lanjut aman tersimpan."
         );
         router.refresh();
       }

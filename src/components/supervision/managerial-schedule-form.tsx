@@ -124,7 +124,7 @@ export default function ManagerialScheduleForm({
       </div>
 
       <div className="rounded-xl border border-sky-600/20 bg-sky-50 p-4 text-[15px] leading-relaxed text-sky-900">
-        <p className="font-bold">Setelah ini, Bapak/Ibu tinggal:</p>
+        <p className="font-bold">Langkah selanjutnya:</p>
         <ol className="mt-2 list-decimal space-y-1 pl-5">
           <li>Isi <strong>Instrumen 1</strong> — Administrasi Kelas (13 pertanyaan).</li>
           <li>Isi <strong>Instrumen 2</strong> — Perencanaan Pembelajaran (10 pertanyaan).</li>

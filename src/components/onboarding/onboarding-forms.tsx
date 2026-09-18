@@ -1,9 +1,11 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useFormState, useFormStatus } from "react-dom";
 import {
   chooseRoleAction,
   createSchoolAction,
+  getJoinSchoolInfoAction,
   joinSchoolAction,
 } from "@/app/onboarding/actions";
 
@@ -156,11 +158,58 @@ export function CreateSchoolForm() {
   );
 }
 
+type JoinLookup =
+  | { status: "idle" }
+  | { status: "checking" }
+  | { status: "found"; schoolName: string; classes: string[] }
+  | { status: "notfound" };
+
 export function JoinSchoolForm() {
   const [state, formAction] = useFormState(joinSchoolAction, {
     ok: false,
     error: null,
   });
+  const [code, setCode] = useState("");
+  const [lookup, setLookup] = useState<JoinLookup>({ status: "idle" });
+  const [taught, setTaught] = useState<string[]>([]);
+
+  // Ketik kode → cari sekolah + daftar kelasnya (untuk dropdown).
+  useEffect(() => {
+    const clean = code.trim().toUpperCase();
+    if (clean.length < 4) {
+      setLookup({ status: "idle" });
+      return;
+    }
+    setLookup({ status: "checking" });
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      const result = await getJoinSchoolInfoAction(clean);
+      if (cancelled) return;
+      if (result.ok && result.schoolName) {
+        setLookup({
+          status: "found",
+          schoolName: result.schoolName,
+          classes: result.classes,
+        });
+      } else {
+        setLookup({ status: "notfound" });
+      }
+    }, 600);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [code]);
+
+  // Pilihan kelas yang dicentang harus selalu dari daftar terbaru.
+  const lookupClasses = lookup.status === "found" ? lookup.classes : [];
+  const taughtValid = taught.filter((c) => lookupClasses.includes(c));
+
+  function toggleTaught(cls: string) {
+    setTaught((prev) =>
+      prev.includes(cls) ? prev.filter((c) => c !== cls) : [...prev, cls]
+    );
+  }
 
   return (
     <form action={formAction} className="space-y-4">
@@ -176,13 +225,32 @@ export function JoinSchoolForm() {
           required
           minLength={4}
           maxLength={20}
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
           placeholder="mis. A7K2P9QX"
           autoComplete="off"
           className={`${inputClass} uppercase tracking-widest`}
         />
-        <p className="text-xs text-muted-foreground">
-          Minta kode undangan kepada Kepala Sekolah Anda.
-        </p>
+        {lookup.status === "checking" && (
+          <p role="status" className="text-xs text-muted-foreground">
+            Mengecek kode...
+          </p>
+        )}
+        {lookup.status === "found" && (
+          <p role="status" className="rounded-md bg-emerald-50 p-2.5 text-xs font-medium text-emerald-800">
+            Sekolah ditemukan: {lookup.schoolName}
+          </p>
+        )}
+        {lookup.status === "notfound" && (
+          <p role="alert" className="rounded-md bg-destructive/10 p-2.5 text-xs font-medium text-destructive">
+            Kode tidak ditemukan. Periksa kembali kode dari Kepala Sekolah.
+          </p>
+        )}
+        {lookup.status === "idle" && (
+          <p className="text-xs text-muted-foreground">
+            Minta kode undangan kepada Kepala Sekolah Anda.
+          </p>
+        )}
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
@@ -216,15 +284,62 @@ export function JoinSchoolForm() {
         <label htmlFor="join-homeroom" className="text-sm font-medium">
           Wali Kelas <span className="font-normal text-muted-foreground">(opsional)</span>
         </label>
-        <input
-          id="join-homeroom"
-          name="homeroomClass"
-          type="text"
-          maxLength={50}
-          placeholder="mis. VII-A (kosongkan bila bukan)"
-          className={inputClass}
-        />
+        {lookupClasses.length > 0 ? (
+          <select id="join-homeroom" name="homeroomClass" className={inputClass} defaultValue="">
+            <option value="">Bukan wali kelas</option>
+            {lookupClasses.map((c) => (
+              <option key={c} value={c}>
+                Kelas {c}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <>
+            <input
+              id="join-homeroom"
+              name="homeroomClass"
+              type="text"
+              maxLength={50}
+              placeholder="mis. I-A (kosongkan bila bukan)"
+              className={inputClass}
+            />
+            <p className="text-xs text-muted-foreground">
+              Kepala Sekolah bisa mengubahnya nanti.
+            </p>
+          </>
+        )}
       </div>
+      {lookupClasses.length > 0 && (
+        <fieldset className="space-y-2">
+          <legend className="text-sm font-medium">
+            Kelas yang diajar{" "}
+            <span className="font-normal text-muted-foreground">
+              (boleh lebih dari satu, opsional)
+            </span>
+          </legend>
+          <div className="grid max-h-48 gap-1.5 overflow-y-auto rounded-md border p-2.5">
+            {lookupClasses.map((c) => (
+              <label
+                key={c}
+                className="flex min-h-[44px] cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-muted"
+              >
+                <input
+                  type="checkbox"
+                  checked={taughtValid.includes(c)}
+                  onChange={() => toggleTaught(c)}
+                  className="h-5 w-5 accent-emerald-700"
+                />
+                Kelas {c}
+              </label>
+            ))}
+          </div>
+          <input
+            type="hidden"
+            name="taughtClassesJson"
+            value={JSON.stringify(taughtValid)}
+          />
+        </fieldset>
+      )}
       <SubmitButton label="Gabung ke Sekolah" pendingLabel="Memproses..." />
     </form>
   );

@@ -158,11 +158,14 @@ export function TeachingForm({
   subject,
   homeroomClass,
   nip,
+  classOptions,
 }: {
   teacherId: string;
   subject: string | null;
   homeroomClass: string | null;
   nip: string | null;
+  /** Daftar kelas dari Kepala Sekolah. Kosong = ketik manual. */
+  classOptions?: string[];
 }) {
   const [state, formAction] = useFormState(updateTeachingAction, {
     ok: false,
@@ -215,15 +218,35 @@ export function TeachingForm({
           >
             Wali Kelas
           </label>
-          <input
-            id="teaching-homeroom"
-            name="homeroomClass"
-            type="text"
-            maxLength={50}
-            defaultValue={homeroomClass ?? ""}
-            placeholder="mis. VII-A — kosongkan bila bukan"
-            className={inputClass}
-          />
+          {(classOptions ?? []).length > 0 ? (
+            <select
+              id="teaching-homeroom"
+              name="homeroomClass"
+              defaultValue={
+                homeroomClass && (classOptions ?? []).includes(homeroomClass)
+                  ? homeroomClass
+                  : ""
+              }
+              className={inputClass}
+            >
+              <option value="">Bukan wali kelas</option>
+              {(classOptions ?? []).map((c) => (
+                <option key={c} value={c}>
+                  Kelas {c}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              id="teaching-homeroom"
+              name="homeroomClass"
+              type="text"
+              maxLength={50}
+              defaultValue={homeroomClass ?? ""}
+              placeholder="mis. I-A — kosongkan bila bukan"
+              className={inputClass}
+            />
+          )}
         </div>
       </div>
       <p className="text-xs text-muted-foreground">

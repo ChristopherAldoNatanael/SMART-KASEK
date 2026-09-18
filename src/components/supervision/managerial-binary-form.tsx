@@ -143,7 +143,7 @@ export default function ManagerialBinaryForm({
       } else if (draftState.ok) {
         toast.success(
           "Sudah tersimpan aman",
-          "Bapak/Ibu bisa menutup halaman ini dan melanjutkannya kapan saja. Tidak ada data yang hilang."
+          "Halaman ini bisa ditutup dan dilanjutkan kapan saja. Tidak ada data yang hilang."
         );
         startTransition(() => router.refresh());
       }
@@ -155,7 +155,7 @@ export default function ManagerialBinaryForm({
       } else if (finalState.ok) {
         toast.success(
           "Bagus, Instrumen 2 selesai",
-          `Ada ${presentCount} dari ${MANAGERIAL_I2_ITEMS.length} indikator (Nilai ${value.toLocaleString("id-ID", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}). Terima kasih, Bu/Pak!`
+          `Ada ${presentCount} dari ${MANAGERIAL_I2_ITEMS.length} indikator (Nilai ${value.toLocaleString("id-ID", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}). Terima kasih.`
         );
         startTransition(() => router.refresh());
       }
@@ -190,14 +190,14 @@ export default function ManagerialBinaryForm({
     <div className="space-y-4">
       {initialStatus === "final" && (
         <p className="rounded-lg border border-amber-600/25 bg-amber-50 p-4 text-[15px] text-amber-800">
-          Instrumen ini sudah selesai (final). Kalau Bapak/Ibu mengubah lalu
+          Instrumen ini sudah selesai (final). Jika ada perubahan lalu
           menekan “Simpan dulu”, statusnya kembali menjadi draft sampai
           diselesaikan ulang.
         </p>
       )}
 
       <div className="rounded-xl border border-sky-600/20 bg-sky-50 p-4 text-[15px] text-sky-900">
-        <p className="font-bold">Cara mengisi — gampang, Bu/Pak:</p>
+        <p className="font-bold">Cara mengisi:</p>
         <ol className="mt-2 list-decimal space-y-1 pl-5 leading-relaxed">
           <li>
             Untuk setiap pernyataan, ketuk <strong>“Ada”</strong> kalau guru

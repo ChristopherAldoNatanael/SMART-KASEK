@@ -4,6 +4,7 @@ import { ArrowLeft, TrendingDown, TrendingUp } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth";
 import { hasRole } from "@/lib/permissions";
 import { getTeacherById } from "@/services/teacher.service";
+import { getActiveSchoolClassNames } from "@/services/school-class.service";
 import {
   getCompetencies,
   getTeacherCompetencySummary,
@@ -89,6 +90,10 @@ export default async function TeacherDetailPage({
     getTeacherCoachingSessions(id).catch(() => []),
   ]);
 
+  const classOptions = await getActiveSchoolClassNames().catch(
+    () => [] as string[]
+  );
+
   const canScore =
     viewer !== null && hasRole(viewer.role, "principal");
   const canEditProfile =
@@ -167,6 +172,7 @@ export default async function TeacherDetailPage({
               subject={teacher.subject}
               homeroomClass={teacher.homeroom_class}
               nip={teacher.nip}
+              classOptions={classOptions}
             />
             <div className="border-t pt-5">
               <h3 className="mb-3 text-sm font-semibold">Data Pokok</h3>

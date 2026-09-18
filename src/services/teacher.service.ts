@@ -339,6 +339,42 @@ export async function deleteTeacher(id: string): Promise<void> {  const user = a
   }
 }
 
+/**
+ * Tetapkan wali kelas. Satu kelas satu wali — pemegang lama kelas yang
+ * sama otomatis dikosongkan. Khusus Kepala Sekolah (ditambah RLS).
+ */
+export async function assignHomeroom(
+  teacherId: string | null,
+  className: string
+): Promise<void> {
+  const user = await getCurrentUser();
+  if (!user?.schoolId) throw new Error("No school access");
+  if (user.role !== "principal" && user.role !== "admin") {
+    throw new Error("Hanya Kepala Sekolah yang dapat mengatur wali kelas");
+  }
+  const target = className.trim();
+  if (!target) throw new Error("Nama kelas tidak valid");
+
+  const supabase = await createClient();
+
+  if (teacherId) {
+    const teacher = await getTeacherById(teacherId);
+    if (!teacher) throw new Error("Guru tidak ditemukan");
+  }
+
+  // Kosongkan dulu semua pemegang kelas ini (tetap dalam sekolah sendiri).
+  const { error: clearError } = await supabase
+    .from("teachers")
+    .update({ homeroom_class: null })
+    .eq("school_id", user.schoolId)
+    .eq("homeroom_class", target);
+  if (clearError) throw new Error(clearError.message);
+
+  if (teacherId) {
+    await updateTeacher(teacherId, { homeroomClass: target });
+  }
+}
+
 function generateTempPassword(): string {
   const chars =
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%";

@@ -1,7 +1,10 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/auth";
+import { currentAcademicYear } from "@/lib/students";
 import { rpcErrorMessage } from "@/schemas/onboarding";
+import { getOwnTeacherId } from "./teacher.service";
 import type { Database } from "@/types/database";
 
 type School = Database["public"]["Tables"]["schools"]["Row"];
@@ -164,6 +167,7 @@ export async function joinSchool(input: {
   code: string;
   subject?: string;
   homeroomClass?: string;
+  taughtClasses?: string[];
   nip?: string;
 }): Promise<SchoolWithInvite> {
   const supabase = await createClient();
@@ -174,7 +178,75 @@ export async function joinSchool(input: {
     p_nip: input.nip || null,
   });
   if (error) throw new Error(rpcErrorMessage(error));
-  return data as SchoolWithInvite;
+  const school = data as SchoolWithInvite;
+
+  // Kelas yang diajar saat mendaftar (guru mapel boleh lebih dari satu).
+  // Best-effort: kegagalan di sini tidak menggagalkan gabung — daftar
+  // bisa dilengkapi nanti di halaman Rekap Absensi.
+  try {
+    const wanted = Array.from(
+      new Set(
+        (input.taughtClasses ?? [])
+          .map((c) => c.trim().slice(0, 50))
+          .filter(Boolean)
+      )
+    ).slice(0, 30);
+    if (wanted.length > 0 && school?.id) {
+      const user = await getCurrentUser();
+      if (user?.schoolId) {
+        const teacherId = await getOwnTeacherId(user.id, user.schoolId);
+        if (teacherId) {
+          const { data: master } = await supabase
+            .from("school_classes")
+            .select("name")
+            .eq("school_id", user.schoolId)
+            .eq("is_active", true);
+          const masterNames = new Set(
+            ((master ?? []) as { name: string }[]).map((r) => r.name)
+          );
+          // Bila sekolah sudah mengatur daftar, hanya yang terdaftar yang dipakai.
+          const valid =
+            masterNames.size > 0
+              ? wanted.filter((c) => masterNames.has(c))
+              : wanted;
+          if (valid.length > 0) {
+            await supabase.from("teaching_assignments").insert(
+              valid.map((c) => ({
+                school_id: user.schoolId as string,
+                teacher_id: teacherId,
+                class_name: c,
+                subject: (input.subject ?? "").trim().slice(0, 100) || "Mapel",
+                academic_year: currentAcademicYear(),
+              }))
+            );
+          }
+        }
+      }
+    }
+  } catch (assignError) {
+    console.error("joinSchool assignments warning:", assignError);
+  }
+  return school;
+}
+
+/**
+ * Info sekolah + daftar kelas aktif dari kode undangan.
+ * Untuk form gabung (dropdown kelas) — hanya nama + daftar nama kelas.
+ */
+export async function getJoinSchoolInfo(code: string): Promise<{
+  schoolName: string;
+  classes: string[];
+}> {
+  const clean = code.trim().toUpperCase();
+  if (clean.length < 4) throw new Error("INVALID_CODE");
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("get_join_school_info", {
+    p_code: clean,
+  });
+  if (error) throw new Error(rpcErrorMessage(error));
+  const info = data as { school_name: string; classes: string[] } | null;
+  if (!info) throw new Error("CODE_NOT_FOUND");
+  return { schoolName: info.school_name, classes: info.classes ?? [] };
 }
 
 /**

@@ -46,6 +46,19 @@ export const joinSchoolSchema = z.object({
         : v,
     z.string().trim().min(1).max(50).optional()
   ),
+  /** Kelas yang diajar saat mendaftar (boleh lebih dari satu). */
+  taughtClassesJson: z.preprocess(
+    (v) => {
+      if (typeof v !== "string" || v.trim() === "") return [];
+      try {
+        const parsed: unknown = JSON.parse(v);
+        return Array.isArray(parsed) ? parsed : v;
+      } catch {
+        return v;
+      }
+    },
+    z.array(z.string().trim().min(1).max(50)).max(30).default([])
+  ),
   nip: z.preprocess(
     (v) =>
       v == null || (typeof v === "string" && v.trim() === "")

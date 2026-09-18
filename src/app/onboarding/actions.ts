@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import {
   createSchool,
   ensureProfile,
+  getJoinSchoolInfo,
   joinSchool,
 } from "@/services/school.service";
 import {
@@ -87,6 +88,7 @@ export async function joinSchoolAction(
     code: formData.get("code"),
     subject: formData.get("subject"),
     homeroomClass: formData.get("homeroomClass"),
+    taughtClassesJson: formData.get("taughtClassesJson"),
     nip: formData.get("nip"),
   });
   if (!parsed.success) {
@@ -98,6 +100,7 @@ export async function joinSchoolAction(
       code: parsed.data.code,
       subject: parsed.data.subject,
       homeroomClass: parsed.data.homeroomClass,
+      taughtClasses: parsed.data.taughtClassesJson,
       nip: parsed.data.nip,
     });
   } catch (error) {
@@ -111,4 +114,20 @@ export async function joinSchoolAction(
 
   revalidatePath("/dashboard");
   redirect("/dashboard");
+}
+
+/**
+ * Cari info sekolah + daftar kelas dari kode undangan (untuk form gabung).
+ * Dipanggil langsung dari browser saat mengetik kode — hanya
+ * mengembalikan nama sekolah + nama kelas aktif (data rendah risiko).
+ */
+export async function getJoinSchoolInfoAction(
+  code: string
+): Promise<{ ok: boolean; schoolName: string | null; classes: string[] }> {
+  try {
+    const info = await getJoinSchoolInfo(code);
+    return { ok: true, schoolName: info.schoolName, classes: info.classes };
+  } catch {
+    return { ok: false, schoolName: null, classes: [] };
+  }
 }

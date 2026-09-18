@@ -44,6 +44,7 @@ const TEACHER_NAV: NavItem[] = [
   { href: "/supervision", label: "Supervisi", icon: ClipboardList },
   { href: "/coaching", label: "Coaching", icon: MessagesSquare },
   { href: "/learning", label: "Pembelajaran", icon: BookOpenText },
+  { href: "/students", label: "Kesiswaan", icon: School },
 ];
 
 export function getNavItems(role: string | null | undefined): NavItem[] {
