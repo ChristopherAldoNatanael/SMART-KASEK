@@ -43,7 +43,7 @@ export default async function TeachersPage() {
             <Th>Nama</Th>
             <Th>Mata Pelajaran</Th>
             <Th>Wali Kelas</Th>
-            <Th>NIP</Th>
+            {canManage && <Th>NIP</Th>}
             <Th>Status</Th>
             <Th className="text-right">Aksi</Th>
           </TableHead>
@@ -57,9 +57,11 @@ export default async function TeachersPage() {
                   <p className="font-medium leading-tight">
                     {teacher.profile?.full_name ?? "—"}
                   </p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    {teacher.profile?.email ?? "—"}
-                  </p>
+                  {canManage && (
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {teacher.profile?.email ?? "—"}
+                    </p>
+                  )}
                 </td>
                 <td className="px-4 py-3 text-muted-foreground">
                   {teacher.subject ?? "—"}
@@ -71,9 +73,11 @@ export default async function TeachersPage() {
                     <span className="text-sm text-muted-foreground">—</span>
                   )}
                 </td>
-                <td className="tnum px-4 py-3 text-muted-foreground">
-                  {teacher.nip ?? "—"}
-                </td>
+                {canManage && (
+                  <td className="tnum px-4 py-3 text-muted-foreground">
+                    {teacher.nip ?? "—"}
+                  </td>
+                )}
                 <td className="px-4 py-3">
                   <Badge tone={teacher.profile?.is_active ? "success" : "neutral"}>
                     {teacher.profile?.is_active ? "Aktif" : "Nonaktif"}

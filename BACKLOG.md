@@ -80,6 +80,15 @@ Format status: `[ ]` belum dikerjakan · `[x]` selesai · `(ronde-N)` kapan sele
       milik sendiri via getMyGrowthData (own-id di query). AI masih
       `requirePrincipal` ("AI Coach Saya" belum ada); untuk sekarang guru memakai
       `/profil` yang merangkum keduanya read-only.
+- [x] Redaksi NIP+email daftar guru untuk role teacher: `getTeachers()`
+      (`src/services/teacher.service.ts:79`) mengembalikan `nip: null` +
+      `profile.email: null` bila pemanggil teacher (berlaku juga untuk
+      `GET /api/teachers`); kolom NIP + email di
+      `src/app/(shell)/teachers/page.tsx` hanya render bila `canManage`
+      (principal). `getTeacherById` sudah own-only, `getMyTeacher`/profil
+      tidak berubah. Tipe `TeacherWithProfile.profile.email` jadi
+      `string | null`; satu-satunya konsumen (`teachers/page.tsx:62`)
+      sudah memakai `?? "—"`.
 
 ### AI Assistant belum jadi asisten (§14)
 

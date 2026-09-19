@@ -9,7 +9,11 @@ type TeacherUpdate = Database["public"]["Tables"]["teachers"]["Update"];
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 
 export type TeacherWithProfile = Teacher & {
-  profile: Pick<Profile, "full_name" | "email" | "avatar_url" | "is_active"> | null;
+  // email dibiarkan nullable: getTeachers() meredaksinya (null) untuk
+  // pemanggil role teacher (AGENTS.md §8 — bukan sekadar sembunyi di UI).
+  profile: Pick<Profile, "full_name" | "avatar_url" | "is_active"> & {
+    email: string | null;
+  } | null;
 };
 
 async function isOwnTeacher(
@@ -97,7 +101,20 @@ export async function getTeachers(): Promise<TeacherWithProfile[]> {
     throw new Error(error.message);
   }
 
-  return data as TeacherWithProfile[];
+  const rows = data as TeacherWithProfile[];
+
+  // Guru boleh melihat daftar rekan satu sekolah, tapi tanpa NIP dan email:
+  // redaksi di service agar juga berlaku untuk /api/teachers dan pemanggil
+  // lain (frontend hiding saja tidak cukup — AGENTS.md §8).
+  if (user.role === "teacher") {
+    return rows.map((t) => ({
+      ...t,
+      nip: null,
+      profile: t.profile ? { ...t.profile, email: null } : null,
+    }));
+  }
+
+  return rows;
 }
 
 export async function getTeacherById(
