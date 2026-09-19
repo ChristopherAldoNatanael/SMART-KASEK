@@ -276,7 +276,8 @@ export default function ManagerialScoreForm({
 
       <ol className="grid gap-3 lg:grid-cols-2">
         {items.map((item, index) => {
-          const s = state[item.key];
+          // Fallback agar render tidak pernah crash bila ada key yang luput.
+          const s = state[item.key] ?? { score: null, note: "" };
           return (
             <li
               key={item.key}

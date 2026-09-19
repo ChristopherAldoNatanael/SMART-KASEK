@@ -16,6 +16,9 @@ import {
 } from "@/lib/supervision-managerial";
 import { deleteSupervisionAction } from "../../actions";
 import DeleteButton from "@/components/delete-button";
+import AICoachDraft from "@/components/supervision/ai-coach-draft";
+import AIInsightPanel from "@/components/supervision/ai-insight-panel";
+import { getCachedSupervisionInsight } from "@/services/ai.service";
 import ManagerialBinaryForm from "@/components/supervision/managerial-binary-form";
 import ManagerialFinalizeButton from "@/components/supervision/managerial-finalize-button";
 import ManagerialFollowUpForm from "@/components/supervision/managerial-followup-form";
@@ -49,9 +52,15 @@ export default async function ManagerialSupervisionDetailPage({
   const data = await getManagerialAssessment(id);
   const assessment = data?.assessment ?? null;
   const items = data?.items ?? [];
+  const cachedInsight = await getCachedSupervisionInsight(id).catch(() => null);
+  const overallFinal = assessment?.status === "final";
 
   const isLeader =
     user !== null && user.schoolId !== null && hasRole(user.role, "principal");
+
+  // Guru hanya membaca hasil tersimpan yang sudah final.
+  const showInsight = isLeader ? items.length > 0 : overallFinal && !!cachedInsight;
+  const showCoachDraft = isLeader && items.length > 0;
 
   const i1Items = items.filter((i) => i.instrument === "i1");
   const i2Items = items.filter((i) => i.instrument === "i2");
@@ -62,7 +71,6 @@ export default async function ManagerialSupervisionDetailPage({
   ).length;
   const i3Answered = i3Items.filter((i) => i.score != null).length;
 
-  const overallFinal = assessment?.status === "final";
   const allInstrumentsFinal =
     assessment?.i1_status === "final" &&
     assessment?.i2_status === "final" &&
@@ -305,6 +313,34 @@ export default async function ManagerialSupervisionDetailPage({
           </dl>
         )}
       </Panel>
+
+      {showInsight && (
+        <Panel
+          title="AI Insight Supervisi"
+          description="Ringkasan otomatis dari hasil penilaian di atas. Nilai tidak diubah."
+        >
+          <AIInsightPanel
+            supervisionId={supervision.id}
+            initial={
+              cachedInsight ? { cached: true, insight: cachedInsight } : null
+            }
+            canGenerate={isLeader}
+          />
+        </Panel>
+      )}
+
+      {showCoachDraft && (
+        <Panel
+          title="AI Coach Guru"
+          description="Susun draf rencana coaching dari temuan supervisi, periksa dulu, lalu simpan ke Coaching."
+        >
+          <AICoachDraft
+            supervisionId={supervision.id}
+            teacherId={supervision.teacher_id}
+            teacherName={supervision.teacher?.profile?.full_name ?? "Tanpa nama"}
+          />
+        </Panel>
+      )}
     </div>
   );
 }

@@ -191,7 +191,7 @@ export default function SupervisionInstrumentForm({
 
   const itemsJson = JSON.stringify(
     INSTRUMENT_ASPECTS.map((a) => {
-      const s = aspects[a.docType];
+      const s = aspects[a.docType] ?? { present: false, score: null, note: "" };
       return {
         docType: a.docType,
         present: s.present,

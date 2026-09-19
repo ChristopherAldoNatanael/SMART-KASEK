@@ -10,7 +10,10 @@ import { getCurrentUser } from "@/lib/auth";
 import { hasRole } from "@/lib/permissions";
 import { deleteSupervisionAction } from "../actions";
 import DeleteButton from "@/components/delete-button";
+import AICoachDraft from "@/components/supervision/ai-coach-draft";
+import AIInsightPanel from "@/components/supervision/ai-insight-panel";
 import SupervisionStatusForm from "@/components/supervision/supervision-status-form";
+import { getCachedSupervisionInsight } from "@/services/ai.service";
 import SupervisionDocuments from "@/components/supervision/supervision-documents";
 import SupervisionInstrumentForm from "@/components/supervision/supervision-instrument-form";
 import SupervisionInstrumentResult from "@/components/supervision/supervision-instrument-result";
@@ -47,8 +50,14 @@ export default async function SupervisionDetailPage({
   }
   const documents = await getSupervisionDocuments(id);
   const instrument = await getInstrumentAssessment(id);
+  const cachedInsight = await getCachedSupervisionInsight(id).catch(() => null);
+  const hasResults = !!instrument && instrument.items.length > 0;
+  const isFinal = instrument?.assessment.status === "final";
   const isLeader =
     user !== null && user.schoolId !== null && hasRole(user.role, "principal");
+  // Guru hanya membaca hasil tersimpan yang sudah final.
+  const showInsight = isLeader ? hasResults : isFinal && !!cachedInsight;
+  const showCoachDraft = isLeader && hasResults;
   // Guru mengunggah dokumen supervisinya sendiri; kepala sekolah menilai.
   // Teacher hanya mencapai halaman ini untuk supervisi miliknya
   // (service memfilter ke teacher_id sendiri), jadi boleh upload.
@@ -343,6 +352,34 @@ export default async function SupervisionDetailPage({
           </p>
         )}
       </Panel>
+
+      {showInsight && (
+        <Panel
+          title="AI Insight Supervisi"
+          description="Ringkasan otomatis dari hasil penilaian di atas. Nilai tidak diubah."
+        >
+          <AIInsightPanel
+            supervisionId={supervision.id}
+            initial={
+              cachedInsight ? { cached: true, insight: cachedInsight } : null
+            }
+            canGenerate={isLeader}
+          />
+        </Panel>
+      )}
+
+      {showCoachDraft && (
+        <Panel
+          title="AI Coach Guru"
+          description="Susun draf rencana coaching dari temuan supervisi, periksa dulu, lalu simpan ke Coaching."
+        >
+          <AICoachDraft
+            supervisionId={supervision.id}
+            teacherId={supervision.teacher_id}
+            teacherName={supervision.teacher?.profile?.full_name ?? "Tanpa nama"}
+          />
+        </Panel>
+      )}
     </div>
   );
 }

@@ -12,15 +12,6 @@ import { z } from "zod";
  * menyertakan dasar penilaian agar tidak terkesan dibuat-buat.
  */
 
-export const COMPETENCY_SOURCES = [
-  "supervision",
-  "self_assessment",
-  "coaching",
-  "assessment",
-  "manual",
-  "ai",
-] as const;
-
 export const upsertCompetencySchema = z.object({
   teacherId: z.string().uuid("Guru tidak valid"),
   competencyId: z.string().uuid("Kompetensi tidak valid"),

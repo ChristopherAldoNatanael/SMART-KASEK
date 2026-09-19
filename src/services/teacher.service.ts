@@ -5,7 +5,6 @@ import { getCurrentUser } from "@/lib/auth";
 import type { Database } from "@/types/database";
 
 type Teacher = Database["public"]["Tables"]["teachers"]["Row"];
-type TeacherInsert = Database["public"]["Tables"]["teachers"]["Insert"];
 type TeacherUpdate = Database["public"]["Tables"]["teachers"]["Update"];
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 
@@ -137,78 +136,6 @@ export async function getTeacherById(
   }
 
   return data as TeacherWithProfile;
-}
-
-export async function createTeacher(input: {
-  fullName: string;
-  email: string;
-  employeeNumber?: string;
-  nip?: string;
-  subject?: string;
-  department?: string;
-  educationLevel?: string;
-  employmentStatus?: string;
-  joinedAt?: string;
-}): Promise<Teacher> {
-  const user = await getCurrentUser();
-  if (!user?.schoolId) throw new Error("No school access");
-
-  const supabase = await createClient();
-
-  const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-    email: input.email,
-    password: generateTempPassword(),
-    email_confirm: true,
-    user_metadata: {
-      full_name: input.fullName,
-    },
-  });
-
-  if (authError) {
-    throw new Error(`Gagal membuat akun: ${authError.message}`);
-  }
-
-  if (!authData.user) {
-    throw new Error("Gagal membuat akun user");
-  }
-
-  const { error: profileError } = await supabase.from("profiles").insert({
-    auth_user_id: authData.user.id,
-    school_id: user.schoolId,
-    full_name: input.fullName,
-    email: input.email,
-    role: "teacher",
-  });
-
-  if (profileError) {
-    await supabase.auth.admin.deleteUser(authData.user.id);
-    throw new Error(`Gagal membuat profil: ${profileError.message}`);
-  }
-
-  const teacherData: TeacherInsert = {
-    profile_id: authData.user.id as unknown as string,
-    school_id: user.schoolId!,
-    employee_number: input.employeeNumber || null,
-    nip: input.nip || null,
-    subject: input.subject || null,
-    department: input.department || null,
-    education_level: input.educationLevel || null,
-    employment_status: input.employmentStatus || "active",
-    joined_at: input.joinedAt || null,
-  };
-
-  const { data, error } = await supabase
-    .from("teachers")
-    .insert(teacherData)
-    .select()
-    .single();
-
-  if (error) {
-    await supabase.auth.admin.deleteUser(authData.user.id);
-    throw new Error(error.message);
-  }
-
-  return data;
 }
 
 export async function updateTeacher(
@@ -394,14 +321,4 @@ export async function assignHomeroom(
   if (teacherId) {
     await updateTeacher(teacherId, { homeroomClass: target });
   }
-}
-
-function generateTempPassword(): string {
-  const chars =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%";
-  let password = "";
-  for (let i = 0; i < 12; i++) {
-    password += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return password;
 }

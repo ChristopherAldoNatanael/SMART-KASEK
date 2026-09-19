@@ -2,9 +2,6 @@ import { redirect } from "next/navigation";
 import { requireUser, type CurrentUser } from "@/lib/auth";
 import type { UserRole } from "@/types/database";
 
-// Re-export auth actions for convenience
-export { login, logout, signup } from "@/lib/auth/actions";
-
 /**
  * Role hierarchy for permission checking.
  * Higher number = more permissions.

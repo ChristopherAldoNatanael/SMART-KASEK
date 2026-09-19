@@ -255,7 +255,8 @@ export default function ManagerialBinaryForm({
 
       <ol className="grid gap-3 lg:grid-cols-2">
         {MANAGERIAL_I2_ITEMS.map((item, index) => {
-          const s = state[item.key];
+          // Fallback agar render tidak pernah crash bila ada key yang luput.
+          const s = state[item.key] ?? { present: null, note: "" };
           const done = s.present !== null;
           return (
             <li

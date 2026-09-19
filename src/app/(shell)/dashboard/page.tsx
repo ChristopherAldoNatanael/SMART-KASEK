@@ -23,6 +23,8 @@ import {
 import { getSchoolGrowthOverview } from "@/services/growth.service";
 import { getCoachingStats } from "@/services/coaching.service";
 import { getSupervisionStats } from "@/services/supervision.service";
+import { getCachedSchoolInsight } from "@/services/ai.service";
+import AISchoolInsight from "@/components/dashboard/ai-school-insight";
 import { getPromotionStats } from "@/services/promotion.service";
 import { currentAcademicYear } from "@/lib/students";
 import { getMyProfileData } from "@/services/profile.service";
@@ -448,6 +450,9 @@ export default async function DashboardPage() {
       error instanceof Error ? error.message : "Gagal memuat data dashboard";
   }
 
+  // Insight tersimpan saja (tanpa memanggil AI) agar dashboard tetap cepat.
+  const cachedSchoolInsight = await getCachedSchoolInsight().catch(() => null);
+
   // Strip Kenaikan Kelas: terpisah agar aman bila tabel belum ada
   // (migrasi belum dijalankan) — gagal diam-diam, dashboard tetap jalan.
   let promotionSummary: {
@@ -552,6 +557,13 @@ export default async function DashboardPage() {
               </span>
             </Link>
           )}
+
+          <Panel
+            title="AI School Insight"
+            description="Ringkasan kondisi sekolah dari angka ringkasan. Tidak menilai individu."
+          >
+            <AISchoolInsight initial={cachedSchoolInsight} />
+          </Panel>
 
           {/* Charts Row */}
           <div className="grid gap-4 lg:grid-cols-3">

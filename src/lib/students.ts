@@ -387,7 +387,7 @@ function normalizeStatus(raw: string): {
  * Ubah baris-baris string (dari CSV atau Excel) menjadi data siswa.
  * Mengembalikan baris valid + daftar masalah per baris (bahasa sederhana).
  */
-export function rowsToStudents(
+function rowsToStudents(
   header: string[],
   rows: { cells: string[]; line: number }[]
 ): { valid: StudentImportRow[]; issues: StudentImportIssue[] } {
@@ -499,7 +499,7 @@ const NAME_KEYS = new Set(["nama", "namalengkap", "namasiswa", "fullname"]);
  * - Kelas terdeteksi dari tulisan "Kelas : X" di atas judul.
  * - Kolom kelas yang kosong diisi dari kelas lembar tersebut.
  */
-export function sheetGridToStudents(
+function sheetGridToStudents(
   grid: string[][],
   sheetName: string | null
 ): { valid: StudentImportRow[]; issues: StudentImportIssue[]; detectedClass: string | null } {

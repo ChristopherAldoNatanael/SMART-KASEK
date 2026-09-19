@@ -83,84 +83,7 @@ export async function getTeacherGrowthSnapshots(
   return data;
 }
 
-/**
- * Get growth trend data for charting.
- */
-export async function getTeacherGrowthTrend(
-  teacherId: string
-): Promise<GrowthTrend[]> {
-  const snapshots = await getTeacherGrowthSnapshots(teacherId);
 
-  return snapshots.map((snapshot) => ({
-    period: snapshot.period,
-    overallScore: snapshot.overall_score,
-    pedagogicScore: snapshot.pedagogic_score,
-    professionalScore: snapshot.professional_score,
-    socialScore: snapshot.social_score,
-    personalityScore: snapshot.personality_score,
-    digitalScore: snapshot.digital_score,
-    assessmentScore: snapshot.assessment_score,
-    classroomScore: snapshot.classroom_score,
-  }));
-}
-
-/**
- * Add a new growth snapshot for a teacher.
- */
-export async function createGrowthSnapshot(input: {
-  teacherId: string;
-  period: string;
-  overallScore?: number;
-  pedagogicScore?: number;
-  professionalScore?: number;
-  socialScore?: number;
-  personalityScore?: number;
-  digitalScore?: number;
-  assessmentScore?: number;
-  classroomScore?: number;
-}): Promise<GrowthSnapshot> {
-  const user = await requirePrincipal();
-  if (!user.schoolId) throw new Error("No school access");
-
-  const supabase = await createClient();
-
-  // Verify teacher belongs to user's school
-  const { data: teacher } = await supabase
-    .from("teachers")
-    .select("id")
-    .eq("id", input.teacherId)
-    .eq("school_id", user.schoolId)
-    .single();
-
-  if (!teacher) {
-    throw new Error("Guru tidak ditemukan");
-  }
-
-  const snapshotData: GrowthSnapshotInsert = {
-    teacher_id: input.teacherId,
-    period: input.period,
-    overall_score: input.overallScore ?? null,
-    pedagogic_score: input.pedagogicScore ?? null,
-    professional_score: input.professionalScore ?? null,
-    social_score: input.socialScore ?? null,
-    personality_score: input.personalityScore ?? null,
-    digital_score: input.digitalScore ?? null,
-    assessment_score: input.assessmentScore ?? null,
-    classroom_score: input.classroomScore ?? null,
-  };
-
-  const { data, error } = await supabase
-    .from("teacher_growth_snapshots")
-    .insert(snapshotData)
-    .select()
-    .single();
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  return data;
-}
 
 /**
  * Get the latest growth snapshot for a teacher.
@@ -226,19 +149,7 @@ export async function calculateGrowthPercentage(
   return Math.round(growth * 100) / 100;
 }
 
-/**
- * Get school-wide growth average.
- */
-export async function getSchoolGrowthAverage(): Promise<{
-  teacherCount: number;
-  averageOverall: number | null;
-}> {
-  const overview = await getSchoolGrowthOverview();
-  return {
-    teacherCount: overview.teacherCount,
-    averageOverall: overview.averageOverall,
-  };
-}
+
 
 /**
  * Deterministic growth engine (AGENTS.md §16-§17).

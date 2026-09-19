@@ -191,33 +191,4 @@ export function isValidManagerialScore(score: unknown): score is number {
   );
 }
 
-export type ManagerialWorkStatus =
-  | "belum"
-  | "draft"
-  | "selesai"
-  | "final";
 
-export const MANAGERIAL_WORK_STATUS_LABELS: Record<
-  ManagerialWorkStatus,
-  string
-> = {
-  belum: "Belum Diisi",
-  draft: "Draft",
-  selesai: "Selesai",
-  final: "Final",
-};
-
-/**
- * Status pengerjaan satu instrumen dari status baris penilaian +
- * kelengkapan jawaban.
- */
-export function managerialWorkStatus(
-  assessmentStatus: ManagerialInstrumentStatus | null,
-  answered: number,
-  total: number
-): ManagerialWorkStatus {
-  if (!assessmentStatus) return answered > 0 ? "draft" : "belum";
-  if (assessmentStatus === "final") return "final";
-  if (answered >= total) return "selesai";
-  return answered > 0 ? "draft" : "belum";
-}

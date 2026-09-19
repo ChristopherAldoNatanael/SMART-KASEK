@@ -34,45 +34,6 @@ export async function getCompetencies(): Promise<Competency[]> {
 }
 
 /**
- * Get competencies for a specific teacher.
- */
-export async function getTeacherCompetencies(
-  teacherId: string
-): Promise<TeacherCompetencyWithDetails[]> {
-  const user = await requirePrincipal();
-  const supabase = await createClient();
-
-  // Verify teacher belongs to user's school
-  const { data: teacher } = await supabase
-    .from("teachers")
-    .select("id")
-    .eq("id", teacherId)
-    .eq("school_id", user.schoolId)
-    .single();
-
-  if (!teacher) {
-    throw new Error("Guru tidak ditemukan");
-  }
-
-  const { data, error } = await supabase
-    .from("teacher_competencies")
-    .select(
-      `
-      *,
-      competency:competencies(name, category, weight)
-    `
-    )
-    .eq("teacher_id", teacherId)
-    .order("assessed_at", { ascending: false });
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  return data as TeacherCompetencyWithDetails[];
-}
-
-/**
  * Add or update a competency score for a teacher.
  */
 export async function upsertTeacherCompetency(input: {

@@ -30,24 +30,6 @@ export async function getEvidenceAllowedMimes(): Promise<string[]> {
 }
 
 /**
- * Parse evidence dari database (string JSON) ke EvidenceData.
- */
-export async function parseEvidence(raw: string | null): Promise<EvidenceData | null> {
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed === "object" && "type" in parsed && "value" in parsed) {
-      return parsed as EvidenceData;
-    }
-    // Legacy data: plain string
-    return { type: "text", value: raw };
-  } catch {
-    // Legacy data: plain string
-    return { type: "text", value: raw };
-  }
-}
-
-/**
  * Serialize EvidenceData ke string untuk disimpan di database.
  */
 export async function serializeEvidence(data: EvidenceData | null): Promise<string | null> {
@@ -164,36 +146,4 @@ export async function getEvidenceDownloadUrl(
   return data.signedUrl;
 }
 
-/**
- * Hapus file bukti dari Storage.
- */
-export async function deleteEvidenceFile(filePath: string): Promise<void> {
-  const supabase = await createClient();
-  const { error } = await supabase.storage
-    .from("coaching-evidence")
-    .remove([filePath]);
 
-  if (error) {
-    console.error("deleteEvidenceFile error:", error.message);
-  }
-}
-
-/**
- * Validasi apakah string adalah URL yang valid.
- */
-export async function isValidUrl(value: string): Promise<boolean> {
-  try {
-    new URL(value);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Detektipe evidence dari value.
- */
-export async function detectEvidenceType(value: string): Promise<EvidenceType> {
-  if (await isValidUrl(value)) return "link";
-  return "text";
-}

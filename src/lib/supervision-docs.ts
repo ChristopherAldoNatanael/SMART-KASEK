@@ -51,5 +51,3 @@ export const SUPERVISION_DOC_MIMES = [
 ] as const;
 
 export const SUPERVISION_DOC_MAX_BYTES = 10 * 1024 * 1024;
-
-export const SUPERVISION_DOC_ACCEPT = ".docx,.doc,.pdf";
