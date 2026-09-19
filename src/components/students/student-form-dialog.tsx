@@ -10,6 +10,7 @@ import {
 } from "@/app/(shell)/students/actions";
 import {
   STUDENT_GENDER_LABELS,
+  STUDENT_RELIGIONS,
   STUDENT_STATUS_LABELS,
 } from "@/lib/students";
 import { toast } from "@/components/toaster";
@@ -144,8 +145,21 @@ export default function StudentFormDialog({
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
+              <label htmlFor="s-induk" className="text-[15px] font-semibold">
+                No. Induk
+              </label>
+              <input
+                id="s-induk"
+                name="noInduk"
+                maxLength={50}
+                defaultValue={row?.no_induk ?? ""}
+                placeholder="Boleh kosong"
+                className={inputClass}
+              />
+            </div>
+            <div className="space-y-1.5">
               <label htmlFor="s-nis" className="text-[15px] font-semibold">
-                NIS / NISN
+                NISN
               </label>
               <input
                 id="s-nis"
@@ -156,6 +170,9 @@ export default function StudentFormDialog({
                 className={inputClass}
               />
             </div>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <label htmlFor="s-kelas" className="text-[15px] font-semibold">
                 Kelas
@@ -175,9 +192,6 @@ export default function StudentFormDialog({
                 ))}
               </datalist>
             </div>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <label htmlFor="s-jk" className="text-[15px] font-semibold">
                 Jenis kelamin
@@ -197,6 +211,28 @@ export default function StudentFormDialog({
                   )
                 )}
               </select>
+            </div>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <label htmlFor="s-agama" className="text-[15px] font-semibold">
+                Agama
+              </label>
+              <input
+                id="s-agama"
+                name="religion"
+                maxLength={50}
+                list="s-agama-saran"
+                defaultValue={row?.religion ?? ""}
+                placeholder="Boleh kosong"
+                className={inputClass}
+              />
+              <datalist id="s-agama-saran">
+                {STUDENT_RELIGIONS.map((r) => (
+                  <option key={r} value={r} />
+                ))}
+              </datalist>
             </div>
             <div className="space-y-1.5">
               <label htmlFor="s-status" className="text-[15px] font-semibold">

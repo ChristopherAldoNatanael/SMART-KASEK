@@ -8,6 +8,11 @@ import {
   updateSchool,
   uploadSchoolLogo,
 } from "@/services/school.service";
+import {
+  updateMyAccountEmail,
+  updateMyAccountName,
+  updateMyPassword,
+} from "@/services/profile.service";
 import { logAuditEvent } from "@/services/audit.service";
 import {
   ALLOWED_LOGO_TYPES,
@@ -15,6 +20,12 @@ import {
   MAX_LOGO_BYTES,
   updateSchoolSchema,
 } from "@/schemas/school-settings";
+import {
+  firstAccountIssueMessage,
+  updateAccountEmailSchema,
+  updateAccountNameSchema,
+  updateAccountPasswordSchema,
+} from "@/schemas/account";
 
 export type SettingsActionState = {
   ok: boolean;
@@ -94,6 +105,111 @@ export async function saveSchoolProfileAction(
   }
 
   revalidateSettings();
+  return { ok: true, error: null };
+}
+
+async function requireAccountAccess(): Promise<string | null> {
+  const user = await requireUser();
+  if (!user.schoolId) return "Akun Anda belum terhubung ke sekolah.";
+  return null;
+}
+
+/** Ubah nama lengkap sendiri (semua peran). */
+export async function updateAccountNameAction(
+  _prev: SettingsActionState,
+  formData: FormData
+): Promise<SettingsActionState> {
+  const blocked = await requireAccountAccess();
+  if (blocked) return { ok: false, error: blocked };
+
+  const parsed = updateAccountNameSchema.safeParse({
+    fullName: formData.get("fullName"),
+  });
+  if (!parsed.success) {
+    return { ok: false, error: firstAccountIssueMessage(parsed.error) };
+  }
+
+  try {
+    await updateMyAccountName(parsed.data.fullName);
+    await logAuditEvent({
+      action: "update",
+      entity: "profiles",
+      newData: { full_name: parsed.data.fullName.trim() },
+    });
+  } catch (error) {
+    console.error("updateAccountNameAction error:", error);
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Gagal menyimpan nama",
+    };
+  }
+
+  revalidateSettings();
+  return { ok: true, error: null };
+}
+
+/** Ubah email sendiri (semua peran, terkirim konfirmasi bila aktif). */
+export async function updateAccountEmailAction(
+  _prev: SettingsActionState,
+  formData: FormData
+): Promise<SettingsActionState> {
+  const blocked = await requireAccountAccess();
+  if (blocked) return { ok: false, error: blocked };
+
+  const parsed = updateAccountEmailSchema.safeParse({
+    email: formData.get("email"),
+  });
+  if (!parsed.success) {
+    return { ok: false, error: firstAccountIssueMessage(parsed.error) };
+  }
+
+  try {
+    await updateMyAccountEmail(parsed.data.email);
+    await logAuditEvent({
+      action: "update",
+      entity: "profiles",
+      newData: { email: parsed.data.email },
+    });
+  } catch (error) {
+    console.error("updateAccountEmailAction error:", error);
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Gagal menyimpan email",
+    };
+  }
+
+  revalidateSettings();
+  return { ok: true, error: null };
+}
+
+/** Ganti kata sandi sendiri (semua peran). */
+export async function updateAccountPasswordAction(
+  _prev: SettingsActionState,
+  formData: FormData
+): Promise<SettingsActionState> {
+  const blocked = await requireAccountAccess();
+  if (blocked) return { ok: false, error: blocked };
+
+  const parsed = updateAccountPasswordSchema.safeParse({
+    password: formData.get("password"),
+    confirmPassword: formData.get("confirmPassword"),
+  });
+  if (!parsed.success) {
+    return { ok: false, error: firstAccountIssueMessage(parsed.error) };
+  }
+
+  try {
+    await updateMyPassword(parsed.data.password);
+    await logAuditEvent({ action: "update", entity: "profiles", newData: {} });
+  } catch (error) {
+    console.error("updateAccountPasswordAction error:", error);
+    return {
+      ok: false,
+      error:
+        error instanceof Error ? error.message : "Gagal mengganti kata sandi",
+    };
+  }
+
   return { ok: true, error: null };
 }
 

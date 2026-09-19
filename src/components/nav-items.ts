@@ -1,4 +1,5 @@
 import {
+  Award,
   BookOpenText,
   ClipboardList,
   FolderKanban,
@@ -29,6 +30,7 @@ const PRINCIPAL_NAV: NavItem[] = [
   { href: "/growth", label: "Teacher Growth", icon: TrendingUp },
   { href: "/learning", label: "Pembelajaran", icon: BookOpenText },
   { href: "/students", label: "Kesiswaan", icon: School },
+  { href: "/kenaikan-kelas", label: "Kenaikan Kelas", icon: Award },
   { href: "/administration", label: "Administrasi", icon: FolderKanban },
   { href: "/settings", label: "Pengaturan", icon: Settings },
 ];
@@ -45,6 +47,8 @@ const TEACHER_NAV: NavItem[] = [
   { href: "/coaching", label: "Coaching", icon: MessagesSquare },
   { href: "/learning", label: "Pembelajaran", icon: BookOpenText },
   { href: "/students", label: "Kesiswaan", icon: School },
+  { href: "/kenaikan-kelas", label: "Kenaikan Kelas", icon: Award },
+  { href: "/settings", label: "Pengaturan", icon: Settings },
 ];
 
 export function getNavItems(role: string | null | undefined): NavItem[] {

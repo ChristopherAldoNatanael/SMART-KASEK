@@ -163,7 +163,16 @@ export default function ClassManager({
                     <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
                       {!c.is_active && <Badge tone="neutral">Nonaktif</Badge>}
                       {c.usedIn > 0 ? (
-                        <span>Dipakai di {c.usedIn} data</span>
+                        <span>
+                          Dipakai:{" "}
+                          {[
+                            c.usedBy.students > 0 && `${c.usedBy.students} siswa`,
+                            c.usedBy.homeroom > 0 && `${c.usedBy.homeroom} wali kelas`,
+                            c.usedBy.assignments > 0 && `${c.usedBy.assignments} daftar ajar`,
+                          ]
+                            .filter(Boolean)
+                            .join(" • ")}
+                        </span>
                       ) : (
                         <span>Belum dipakai</span>
                       )}

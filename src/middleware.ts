@@ -20,14 +20,11 @@ export async function middleware(request: NextRequest) {
     const { supabaseResponse, user } = await updateSession(request);
     const pathname = request.nextUrl.pathname;
 
-    if (pathname === "/") {
-      const url = user ? "/dashboard" : "/login";
-      return redirectWithCookies(url, request, supabaseResponse);
-    }
-
-    const isPublicRoute = PUBLIC_ROUTES.some(
-      (route) => pathname === route || pathname.startsWith(`${route}/`)
-    );
+    const isPublicRoute =
+      pathname === "/" ||
+      PUBLIC_ROUTES.some(
+        (route) => pathname === route || pathname.startsWith(`${route}/`)
+      );
 
     if (!user && !isPublicRoute) {
       return redirectWithCookies("/login", request, supabaseResponse);

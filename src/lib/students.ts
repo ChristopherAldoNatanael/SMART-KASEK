@@ -17,8 +17,10 @@ export type StudentStatusValue =
 export type StudentImportRow = {
   full_name: string;
   student_number: string | null;
+  no_induk: string | null;
   class_name: string | null;
   gender: StudentGenderValue | null;
+  religion: string | null;
   status: StudentStatusValue;
 };
 
@@ -149,6 +151,13 @@ export function nextAcademicYear(now: Date = new Date()): string {
   return m >= 7 ? `${y + 1}/${y + 2}` : `${y}/${y + 1}`;
 }
 
+/** Satu tahun ajaran sebelumnya (untuk melihat arsip). */
+export function previousAcademicYear(now: Date = new Date()): string {
+  const y = now.getFullYear();
+  const m = now.getMonth() + 1;
+  return m >= 7 ? `${y - 1}/${y}` : `${y - 2}/${y - 1}`;
+}
+
 /** "2026/2027" → "2027/2028". Null bila format tak dikenal. */
 export function yearAfter(year: string): string | null {
   const m = year.trim().match(/^(\d{4})\s*\/\s*(\d{4})$/);
@@ -157,8 +166,8 @@ export function yearAfter(year: string): string | null {
 }
 
 /**
- * Daftar tahun untuk filter: tahun di database + tahun berjalan +
- * tahun depan (agar bisa pindah ke tahun depan walau masih kosong),
+ * Daftar tahun untuk filter: tahun di database + setahun sebelumnya +
+ * tahun berjalan + tahun depan (selalu bisa dipilih walau masih kosong),
  * terbaru dulu.
  */
 export function academicYearOptions(existing: (string | null)[]): string[] {
@@ -166,6 +175,7 @@ export function academicYearOptions(existing: (string | null)[]): string[] {
   for (const y of existing) {
     if (y && y.trim()) set.add(y.trim());
   }
+  set.add(previousAcademicYear());
   set.add(currentAcademicYear());
   set.add(nextAcademicYear());
   return Array.from(set).sort((a, b) => (a < b ? 1 : -1));
@@ -204,10 +214,20 @@ export function isFinalYearClass(className: string): boolean {
 
 /* ------------------------------- Template ------------------------------ */
 
+/** 6 agama resmi untuk saran isian (tetap boleh tulis lain). */
+export const STUDENT_RELIGIONS = [
+  "Islam",
+  "Kristen",
+  "Katolik",
+  "Hindu",
+  "Buddha",
+  "Konghucu",
+] as const;
+
 export const STUDENT_TEMPLATE_FILENAME = "template-data-siswa.csv";
 
 export const STUDENT_TEMPLATE_CSV =
-  "nama_lengkap,nis,kelas,jenis_kelamin,status\n";
+  "nama_lengkap,no_induk,nisn,kelas,jenis_kelamin,agama,status\n";
 
 export const STUDENT_TEMPLATE_GUIDE: { column: string; rule: string }[] = [
   {
@@ -215,8 +235,12 @@ export const STUDENT_TEMPLATE_GUIDE: { column: string; rule: string }[] = [
     rule: "Wajib diisi. Contoh: Siti Aminah",
   },
   {
-    column: "nis",
-    rule: "Boleh kosong. Nomor induk / NISN. Contoh: 12345",
+    column: "no_induk",
+    rule: "Boleh kosong. Nomor induk sekolah. Contoh: 1234",
+  },
+  {
+    column: "nisn",
+    rule: "Boleh kosong. Nomor Induk Siswa Nasional. Contoh: 0101234567",
   },
   {
     column: "kelas",
@@ -225,6 +249,10 @@ export const STUDENT_TEMPLATE_GUIDE: { column: string; rule: string }[] = [
   {
     column: "jenis_kelamin",
     rule: "Boleh kosong. Isi L atau P (boleh juga Laki-laki / Perempuan)",
+  },
+  {
+    column: "agama",
+    rule: "Boleh kosong. Contoh: Islam, Kristen, Katolik, Hindu, Buddha, Konghucu",
   },
   {
     column: "status",
@@ -281,12 +309,13 @@ function normalizeHeader(h: string): string {
 const HEADER_MAP: Record<string, keyof StudentImportRow> = {
   nama: "full_name",
   namalengkap: "full_name",
+  namasiswa: "full_name",
   fullname: "full_name",
   nis: "student_number",
   nisn: "student_number",
-  noinduk: "student_number",
-  nomorinduk: "student_number",
   nomor: "student_number",
+  noinduk: "no_induk",
+  nomorinduk: "no_induk",
   kelas: "class_name",
   class: "class_name",
   rombel: "class_name",
@@ -295,8 +324,29 @@ const HEADER_MAP: Record<string, keyof StudentImportRow> = {
   kelamin: "gender",
   gender: "gender",
   lp: "gender",
+  agama: "religion",
+  religion: "religion",
   status: "status",
 };
+
+/** Samakan penulisan agama resmi (tak peduli kapital/varian umum); selainnya dibiarkan apa adanya. */
+function normalizeReligion(raw: string): string | null {
+  const v = raw.trim().slice(0, 50);
+  if (!v || v === "-" || v === "?" || v === "–") return null;
+  const lower = v.toLowerCase();
+  const found = (STUDENT_RELIGIONS as readonly string[]).find(
+    (r) => r.toLowerCase() === lower
+  );
+  if (found) return found;
+  const variants: Record<string, string> = {
+    katholik: "Katolik",
+    budha: "Buddha",
+    buda: "Buddha",
+    protestan: "Kristen",
+    khonghucu: "Konghucu",
+  };
+  return variants[lower] ?? v;
+}
 
 function normalizeGender(raw: string): {
   value: StudentGenderValue | null;
@@ -339,7 +389,7 @@ function normalizeStatus(raw: string): {
  */
 export function rowsToStudents(
   header: string[],
-  rows: string[][]
+  rows: { cells: string[]; line: number }[]
 ): { valid: StudentImportRow[]; issues: StudentImportIssue[] } {
   const colIndex = new Map<keyof StudentImportRow, number>();
   header.forEach((h, i) => {
@@ -363,8 +413,8 @@ export function rowsToStudents(
     };
   }
 
-  rows.forEach((cells, r) => {
-    const rowNumber = r + 2; // +1 header, +1 basis 1
+  rows.forEach(({ cells, line }) => {
+    const rowNumber = line;
     if (cells.every((c) => !c.trim())) return; // baris kosong dilewati
 
     const get = (k: keyof StudentImportRow): string => {
@@ -373,8 +423,25 @@ export function rowsToStudents(
     };
 
     const fullName = get("full_name").slice(0, 100);
+    // Baris rekap manual (mis. "L=12, P=22" atau "Jumlah : 34") dilewati
+    // diam-diam — baik saat kolom nama kosong maupun saat tulisannya
+    // nyasar di kolom nama. Jumlah L/P dihitung sistem, bukan dari file.
+    const looksLikeSummary = (text: string): boolean =>
+      [
+        /l\s*=\s*\d/i,
+        /p\s*=\s*\d/i,
+        /jumlah/i,
+        /\btotal\b/i,
+        /rekap/i,
+        /\bjml\b/i,
+      ].some((re) => re.test(text)) || /^[^a-zA-Z]+$/.test(text);
     if (!fullName) {
-      issues.push({ rowNumber, message: "Nama kosong — baris ini dilewati." });
+      if (!looksLikeSummary(cells.join(" "))) {
+        issues.push({ rowNumber, message: "Nama kosong — baris ini dilewati." });
+      }
+      return;
+    }
+    if (looksLikeSummary(fullName)) {
       return;
     }
 
@@ -393,8 +460,10 @@ export function rowsToStudents(
     valid.push({
       full_name: fullName,
       student_number: nis || null,
+      no_induk: get("no_induk").slice(0, 50) || null,
       class_name: get("class_name").slice(0, 50) || null,
       gender: gender.value,
+      religion: normalizeReligion(get("religion")),
       status: status.value,
     });
   });
@@ -415,20 +484,114 @@ export function parseStudentsCsv(text: string): {
       issues: [{ rowNumber: 0, message: "File kosong — tidak ada data." }],
     };
   }
-  if (lines.length === 1) {
+  const delimiter = detectDelimiter(
+    lines.find((l) => l.includes(",") || l.includes(";")) ?? lines[0]
+  );
+  const grid = lines.map((l) => splitCsvLine(l, delimiter));
+  return gridsToStudents([{ name: null, grid }]);
+}
+
+const NAME_KEYS = new Set(["nama", "namalengkap", "namasiswa", "fullname"]);
+
+/**
+ * Ubah 1 lembar tabel (boleh ada judul/kop di atas) menjadi data siswa.
+ * - Baris judul tabel dicari otomatis (bukan harus baris pertama).
+ * - Kelas terdeteksi dari tulisan "Kelas : X" di atas judul.
+ * - Kolom kelas yang kosong diisi dari kelas lembar tersebut.
+ */
+export function sheetGridToStudents(
+  grid: string[][],
+  sheetName: string | null
+): { valid: StudentImportRow[]; issues: StudentImportIssue[]; detectedClass: string | null } {
+  const tag = sheetName ? `Sheet “${sheetName}” — ` : "";
+  // Baris kosong dibuang, tapi nomor baris asli tetap dicatat.
+  const kept: { cells: string[]; line: number }[] = [];
+  grid.forEach((cells, i) => {
+    if (cells.some((c) => c.trim() !== "")) kept.push({ cells, line: i + 1 });
+  });
+  if (kept.length === 0) {
+    return { valid: [], issues: [], detectedClass: null };
+  }
+
+  let headerPos = -1;
+  for (let i = 0; i < Math.min(kept.length, 12); i++) {
+    if (kept[i].cells.some((c) => NAME_KEYS.has(normalizeHeader(c)))) {
+      headerPos = i;
+      break;
+    }
+  }
+  if (headerPos < 0) {
     return {
       valid: [],
       issues: [
         {
           rowNumber: 1,
           message:
-            "Hanya ada judul tanpa isi. Tambahkan minimal 1 baris data siswa di bawah judul.",
+            `${tag}kolom nama tidak ditemukan. Pastikan ada judul kolom seperti: nama_lengkap, nis, kelas, jenis_kelamin, status. Unduh template contoh bila ragu.`,
         },
       ],
+      detectedClass: null,
     };
   }
-  const delimiter = detectDelimiter(lines[0]);
-  const header = splitCsvLine(lines[0], delimiter);
-  const rows = lines.slice(1).map((l) => splitCsvLine(l, delimiter));
-  return rowsToStudents(header, rows);
+
+  let detectedClass: string | null = null;
+  for (let i = 0; i < headerPos; i++) {
+    const m = kept[i].cells
+      .join(" ")
+      .match(/kelas\s*:?\s*([A-Za-z0-9][A-Za-z0-9\s\-–_]*)/i);
+    if (m) {
+      detectedClass = m[1].trim().slice(0, 50) || null;
+      break;
+    }
+  }
+
+  const header = kept[headerPos].cells;
+  const dataRows = kept.slice(headerPos + 1);
+  if (dataRows.length === 0) {
+    return {
+      valid: [],
+      issues: [
+        {
+          rowNumber: kept[headerPos].line,
+          message: `${tag}hanya ada judul tanpa isi. Tambahkan minimal 1 baris data siswa di bawah judul.`,
+        },
+      ],
+      detectedClass,
+    };
+  }
+  const { valid, issues } = rowsToStudents(header, dataRows);
+  const fixed = issues.map((issue) => ({
+    ...issue,
+    message: `${tag}${issue.message}`,
+  }));
+
+  if (detectedClass) {
+    for (const row of valid) {
+      if (!row.class_name) row.class_name = detectedClass;
+    }
+  }
+  return { valid, issues: fixed, detectedClass };
+}
+
+/**
+ * Gabungkan banyak lembar (Excel multi-sheet / satu CSV).
+ * Lembar kosong dilewati diam-diam.
+ */
+export function gridsToStudents(
+  sheets: { name: string | null; grid: string[][] }[]
+): { valid: StudentImportRow[]; issues: StudentImportIssue[] } {
+  const valid: StudentImportRow[] = [];
+  const issues: StudentImportIssue[] = [];
+  for (const sheet of sheets) {
+    const parsed = sheetGridToStudents(sheet.grid, sheet.name);
+    valid.push(...parsed.valid);
+    issues.push(...parsed.issues);
+  }
+  if (valid.length === 0 && issues.length === 0) {
+    return {
+      valid: [],
+      issues: [{ rowNumber: 0, message: "File kosong — tidak ada data." }],
+    };
+  }
+  return { valid, issues };
 }

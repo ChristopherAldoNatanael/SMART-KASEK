@@ -140,6 +140,7 @@ function SidebarBody({
     "/growth",
     "/learning",
     "/students",
+    "/kenaikan-kelas",
     "/profil",
   ]);
   const manage = items.filter((i) => manageHrefs.has(i.href));

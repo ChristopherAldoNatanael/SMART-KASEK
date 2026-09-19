@@ -6,7 +6,27 @@ import type { Database } from "@/types/database";
 
 type SchoolClass = Database["public"]["Tables"]["school_classes"]["Row"];
 
-export type SchoolClassWithUsage = SchoolClass & { usedIn: number };
+export type ClassUsage = {
+  students: number;
+  homeroom: number;
+  assignments: number;
+};
+
+export type SchoolClassWithUsage = SchoolClass & {
+  usedIn: number;
+  usedBy: ClassUsage;
+};
+
+function usageText(usedBy: ClassUsage): string {
+  const parts: string[] = [];
+  if (usedBy.students > 0)
+    parts.push(`${usedBy.students} siswa`);
+  if (usedBy.homeroom > 0)
+    parts.push(`${usedBy.homeroom} wali kelas`);
+  if (usedBy.assignments > 0)
+    parts.push(`${usedBy.assignments} daftar ajar`);
+  return parts.join(", ");
+}
 
 async function requireClassManager(): Promise<{ schoolId: string }> {
   const user = await getCurrentUser();
@@ -64,20 +84,27 @@ export async function getSchoolClassesWithUsage(): Promise<SchoolClassWithUsage[
       supabase.from("teachers").select("homeroom_class").eq("school_id", schoolId),
       supabase.from("teaching_assignments").select("class_name").eq("school_id", schoolId),
     ]);
-  const useCount = new Map<string, number>();
-  const bump = (name: string | null) => {
+  const useCount = new Map<string, ClassUsage>();
+  const bump = (name: string | null, kind: keyof ClassUsage) => {
     const key = (name ?? "").trim().toLowerCase();
     if (!key) return;
-    useCount.set(key, (useCount.get(key) ?? 0) + 1);
+    const cur = useCount.get(key) ?? { students: 0, homeroom: 0, assignments: 0 };
+    cur[kind]++;
+    useCount.set(key, cur);
   };
-  for (const r of (students ?? []) as { class_name: string | null }[]) bump(r.class_name);
-  for (const r of (teachers ?? []) as { homeroom_class: string | null }[]) bump(r.homeroom_class);
-  for (const r of (assigns ?? []) as { class_name: string }[]) bump(r.class_name);
+  for (const r of (students ?? []) as { class_name: string | null }[]) bump(r.class_name, "students");
+  for (const r of (teachers ?? []) as { homeroom_class: string | null }[]) bump(r.homeroom_class, "homeroom");
+  for (const r of (assigns ?? []) as { class_name: string }[]) bump(r.class_name, "assignments");
 
-  return sortClasses(((classes ?? []) as SchoolClass[]).map((c) => ({
-    ...c,
-    usedIn: useCount.get(c.name.trim().toLowerCase()) ?? 0,
-  })));
+  return sortClasses(((classes ?? []) as SchoolClass[]).map((c) => {
+    const usedBy =
+      useCount.get(c.name.trim().toLowerCase()) ?? { students: 0, homeroom: 0, assignments: 0 };
+    return {
+      ...c,
+      usedIn: usedBy.students + usedBy.homeroom + usedBy.assignments,
+      usedBy,
+    };
+  }));
 }
 
 export async function createSchoolClass(name: string): Promise<SchoolClass> {
@@ -156,10 +183,12 @@ export async function deleteSchoolClass(id: string): Promise<void> {
   const { schoolId } = await requireClassManager();
   const owned = await getOwnedClass(id, schoolId);
   const withUsage = await getSchoolClassesWithUsage();
-  const used = withUsage.find((c) => c.id === id)?.usedIn ?? 0;
+  const found = withUsage.find((c) => c.id === id);
+  const used = found?.usedIn ?? 0;
   if (used > 0) {
+    const detail = found ? usageText(found.usedBy) : "beberapa data";
     throw new Error(
-      `Kelas ${owned.name} masih dipakai di ${used} data (siswa/wali/daftar ajar). Nonaktifkan saja bila tidak dipakai.`
+      `Kelas ${owned.name} masih dipakai (${detail}). Kosongkan dulu datanya, atau nonaktifkan saja bila tidak dipakai.`
     );
   }
   const supabase = await createClient();

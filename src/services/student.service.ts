@@ -100,7 +100,8 @@ export async function getStudents(filters: StudentFilters): Promise<{
     if (!q) return true;
     return (
       r.full_name.toLowerCase().includes(q) ||
-      (r.student_number ?? "").toLowerCase().includes(q)
+      (r.student_number ?? "").toLowerCase().includes(q) ||
+      (r.no_induk ?? "").toLowerCase().includes(q)
     );
   });
 
@@ -198,157 +199,15 @@ export async function bulkDeleteStudents(input: {
   return { deleted: ids.length, classes: targets };
 }
 
-/* ------------------------------ Kenaikan kelas --------------------------- */
-
-export type PromotePreview = {
-  className: string | null;
-  total: number;
-  active: number;
-}[];
-
-/** Daftar kelas + jumlah siswa pada tahun asal (untuk panel kenaikan kelas). */
-export async function getPromotePreview(sourceYear: string): Promise<PromotePreview> {
-  const { schoolId } = await requireSchoolUser();
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("students")
-    .select("class_name, status, academic_year")
-    .eq("school_id", schoolId);
-  if (error) throw new Error(error.message);
-
-  const groups = new Map<string, { total: number; active: number }>();
-  for (const r of (data ?? []) as Pick<Student, "class_name" | "status" | "academic_year">[]) {
-    if (normYear(r) !== sourceYear) continue;
-    const key = (r.class_name ?? "").trim();
-    const g = groups.get(key) ?? { total: 0, active: 0 };
-    g.total++;
-    if (r.status === "active") g.active++;
-    groups.set(key, g);
-  }
-  return Array.from(groups.entries())
-    .map(([key, g]) => ({ className: key || null, total: g.total, active: g.active }))
-    .sort((a, b) => (a.className ?? "").localeCompare(b.className ?? "", "id"));
-}
-
-export type PromoteOutcome = {
-  moved: number;
-  graduated: number;
-  skipped: number;
-};
-
-/**
- * Pindahkan siswa aktif tahun asal ke tahun tujuan sesuai peta kelas.
- * - graduate=true → tercatat di tahun tujuan dengan status Lulus.
- * - Baris yang sudah ada di tahun tujuan dilewati (aman dijalankan ulang).
- */
-export async function promoteStudents(input: {
-  sourceYear: string;
-  targetYear: string;
-  mappings: { fromClass: string | null; toClass: string | null; graduate: boolean }[];
-}): Promise<PromoteOutcome> {
-  const { schoolId } = await requireSchoolUser();
-  if (input.sourceYear === input.targetYear) {
-    throw new Error("Tahun asal dan tahun tujuan tidak boleh sama");
-  }
-
-  const usable = input.mappings.filter(
-    (m) => m.graduate || (m.toClass ?? "").trim() !== ""
-  );
-  if (usable.length === 0) {
-    throw new Error("Isi kelas tujuan minimal untuk 1 kelas, atau tandai lulus");
-  }
-
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("students")
-    .select("*")
-    .eq("school_id", schoolId);
-  if (error) throw new Error(error.message);
-  const all = (data ?? []) as Student[];
-
-  const byClass = new Map<string, Student[]>();
-  for (const r of all) {
-    if (normYear(r) !== input.sourceYear || r.status !== "active") continue;
-    const key = (r.class_name ?? "").trim().toLowerCase();
-    const list = byClass.get(key) ?? [];
-    list.push(r);
-    byClass.set(key, list);
-  }
-
-  const seen = new Set(
-    all
-      .filter((r) => normYear(r) === input.targetYear)
-      .map((r) =>
-        dedupeKey({
-          student_number: r.student_number,
-          full_name: r.full_name,
-          class_name: r.class_name,
-        })
-      )
-  );
-
-  let moved = 0;
-  let graduated = 0;
-  let skipped = 0;
-  const batch: Database["public"]["Tables"]["students"]["Insert"][] = [];
-
-  async function flush(): Promise<void> {
-    if (batch.length === 0) return;
-    const chunk = batch.splice(0);
-    const { error: insertError } = await supabase.from("students").insert(chunk);
-    if (insertError) throw new Error(insertError.message);
-  }
-
-  for (const m of usable) {
-    const students = byClass.get(((m.fromClass ?? "").trim()).toLowerCase()) ?? [];
-    for (const s of students) {
-      const next: Database["public"]["Tables"]["students"]["Insert"] = m.graduate
-        ? {
-            school_id: schoolId,
-            full_name: s.full_name,
-            student_number: s.student_number,
-            class_name: s.class_name,
-            gender: s.gender,
-            status: "graduated",
-            academic_year: input.targetYear,
-          }
-        : {
-            school_id: schoolId,
-            full_name: s.full_name,
-            student_number: s.student_number,
-            class_name: (m.toClass ?? "").trim() || null,
-            gender: s.gender,
-            status: "active",
-            academic_year: input.targetYear,
-          };
-      const key = dedupeKey({
-        student_number: next.student_number ?? null,
-        full_name: next.full_name ?? "",
-        class_name: next.class_name ?? null,
-      });
-      if (seen.has(key)) {
-        skipped++;
-        continue;
-      }
-      seen.add(key);
-      batch.push(next);
-      if (m.graduate) graduated++;
-      else moved++;
-      if (batch.length >= 100) await flush();
-    }
-  }
-  await flush();
-
-  return { moved, graduated, skipped };
-}
-
 /* --------------------------------- Mutasi ------------------------------- */
 
 export async function createStudent(input: {
   fullName: string;
   studentNumber?: string;
+  noInduk?: string;
   className?: string;
   gender?: "male" | "female";
+  religion?: string;
   status: Student["status"];
   academicYear: string;
 }): Promise<Student> {
@@ -360,8 +219,10 @@ export async function createStudent(input: {
       school_id: schoolId,
       full_name: input.fullName.trim(),
       student_number: input.studentNumber?.trim() || null,
+      no_induk: input.noInduk?.trim() || null,
       class_name: input.className?.trim() || null,
       gender: input.gender ?? null,
+      religion: input.religion?.trim() || null,
       status: input.status,
       academic_year: input.academicYear,
     })
@@ -376,8 +237,10 @@ export async function updateStudent(
   input: {
     fullName: string;
     studentNumber?: string;
+    noInduk?: string;
     className?: string;
     gender?: "male" | "female";
+    religion?: string;
     status: Student["status"];
     academicYear: string;
   }
@@ -392,8 +255,10 @@ export async function updateStudent(
     .update({
       full_name: input.fullName.trim(),
       student_number: input.studentNumber?.trim() || null,
+      no_induk: input.noInduk?.trim() || null,
       class_name: input.className?.trim() || null,
       gender: input.gender ?? null,
+      religion: input.religion?.trim() || null,
       status: input.status,
       academic_year: input.academicYear,
     })
@@ -433,8 +298,10 @@ export async function importStudents(
   rows: {
     full_name: string;
     student_number: string | null;
+    no_induk: string | null;
     class_name: string | null;
     gender: "male" | "female" | null;
+    religion: string | null;
     status: Student["status"];
   }[],
   academicYear: string
@@ -474,8 +341,10 @@ export async function importStudents(
       school_id: schoolId,
       full_name: row.full_name.trim(),
       student_number: row.student_number?.trim() || null,
+      no_induk: row.no_induk?.trim() || null,
       class_name: row.class_name?.trim() || null,
       gender: row.gender,
+      religion: row.religion?.trim() || null,
       status: row.status,
       academic_year: academicYear,
     });

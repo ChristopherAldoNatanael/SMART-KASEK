@@ -23,6 +23,8 @@ import {
 import { getSchoolGrowthOverview } from "@/services/growth.service";
 import { getCoachingStats } from "@/services/coaching.service";
 import { getSupervisionStats } from "@/services/supervision.service";
+import { getPromotionStats } from "@/services/promotion.service";
+import { currentAcademicYear } from "@/lib/students";
 import { getMyProfileData } from "@/services/profile.service";
 import { Empty, PageHeader, Panel, Stat } from "@/components/common";
 import InviteCodeCard from "@/components/school/invite-code-card";
@@ -446,6 +448,26 @@ export default async function DashboardPage() {
       error instanceof Error ? error.message : "Gagal memuat data dashboard";
   }
 
+  // Strip Kenaikan Kelas: terpisah agar aman bila tabel belum ada
+  // (migrasi belum dijalankan) — gagal diam-diam, dashboard tetap jalan.
+  let promotionSummary: {
+    total: number;
+    submitted: number;
+    decided: number;
+  } | null = null;
+  try {
+    const promotionStats = await getPromotionStats(currentAcademicYear());
+    if (promotionStats.total > 0) {
+      promotionSummary = {
+        total: promotionStats.total,
+        submitted: promotionStats.submitted,
+        decided: promotionStats.decided,
+      };
+    }
+  } catch {
+    promotionSummary = null;
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -506,6 +528,30 @@ export default async function DashboardPage() {
               sub={`Supervisi ${stats.supervisionCompleted}/${stats.supervisionTotal}`}
             />
           </div>
+
+          {promotionSummary && (
+            <Link
+              href="/kenaikan-kelas"
+              className="flex flex-wrap items-center gap-x-8 gap-y-2 rounded-xl border bg-card px-5 py-4 text-sm shadow-[0_1px_2px_rgba(16,24,40,0.05)] transition-colors hover:border-primary/50"
+            >
+              <span className="font-bold">Kenaikan Kelas</span>
+              <span className="flex items-baseline gap-2">
+                <span className="text-muted-foreground">Total Siswa</span>
+                <span className="tnum text-lg font-bold">{promotionSummary.total}</span>
+              </span>
+              <span className="flex items-baseline gap-2">
+                <span className="text-muted-foreground">Menunggu Verifikasi</span>
+                <span className="tnum text-lg font-bold">{promotionSummary.submitted}</span>
+              </span>
+              <span className="flex items-baseline gap-2">
+                <span className="text-muted-foreground">Ditetapkan</span>
+                <span className="tnum text-lg font-bold">{promotionSummary.decided}</span>
+              </span>
+              <span className="ml-auto inline-flex items-center gap-1 font-medium text-brand">
+                Buka <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+              </span>
+            </Link>
+          )}
 
           {/* Charts Row */}
           <div className="grid gap-4 lg:grid-cols-3">

@@ -7,10 +7,7 @@ import { Pencil, Trash2 } from "lucide-react";
 import { deleteStudentAction } from "@/app/(shell)/students/actions";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Badge } from "@/components/common";
-import {
-  STUDENT_GENDER_LABELS,
-  STUDENT_STATUS_LABELS,
-} from "@/lib/students";
+import { STUDENT_STATUS_LABELS } from "@/lib/students";
 import { toast } from "@/components/toaster";
 import { cn } from "@/lib/utils";
 import StudentFormDialog from "./student-form-dialog";
@@ -75,26 +72,39 @@ export default function StudentTable({
 
   return (
     <div className="overflow-x-auto rounded-xl border bg-card">
-      <table className="w-full min-w-[720px] text-left text-[15px]">
+      <table className="w-full min-w-[860px] text-left text-[15px]">
         <thead>
           <tr className="border-b bg-muted/40 text-sm text-muted-foreground">
-            <th className="px-4 py-3 font-semibold">Nama</th>
-            <th className="px-4 py-3 font-semibold">NIS</th>
+            <th className="w-12 px-4 py-3 font-semibold">No</th>
+            <th className="px-4 py-3 font-semibold">No. Induk</th>
+            <th className="px-4 py-3 font-semibold">NISN</th>
+            <th className="px-4 py-3 font-semibold">Nama Siswa</th>
+            <th className="px-4 py-3 text-center font-semibold">JK</th>
+            <th className="px-4 py-3 font-semibold">Agama</th>
             <th className="px-4 py-3 font-semibold">Kelas</th>
-            <th className="px-4 py-3 font-semibold">L/P</th>
             <th className="px-4 py-3 font-semibold">Status</th>
             <th className="px-4 py-3 text-right font-semibold">Aksi</th>
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => (
+          {rows.map((row, index) => (
             <tr
               key={row.id}
               className="border-b transition-colors last:border-0 hover:bg-muted/40"
             >
-              <td className="px-4 py-3 font-semibold">{row.full_name}</td>
+              <td className="tnum px-4 py-3 text-muted-foreground">{index + 1}</td>
+              <td className="tnum whitespace-nowrap px-4 py-3 text-muted-foreground">
+                {row.no_induk ?? "—"}
+              </td>
               <td className="tnum whitespace-nowrap px-4 py-3 text-muted-foreground">
                 {row.student_number ?? "—"}
+              </td>
+              <td className="px-4 py-3 font-semibold">{row.full_name}</td>
+              <td className="whitespace-nowrap px-4 py-3 text-center font-semibold">
+                {row.gender === "male" ? "L" : row.gender === "female" ? "P" : "—"}
+              </td>
+              <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
+                {row.religion ?? "—"}
               </td>
               <td className="whitespace-nowrap px-4 py-3">
                 {row.class_name ? (
@@ -102,9 +112,6 @@ export default function StudentTable({
                 ) : (
                   <span className="text-muted-foreground">—</span>
                 )}
-              </td>
-              <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
-                {row.gender ? STUDENT_GENDER_LABELS[row.gender] : "—"}
               </td>
               <td className="whitespace-nowrap px-4 py-3">
                 <Badge tone={STATUS_TONES[row.status] ?? "neutral"}>

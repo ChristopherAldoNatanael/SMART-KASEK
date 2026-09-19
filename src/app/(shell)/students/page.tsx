@@ -24,7 +24,6 @@ import ClassHomeroom from "@/components/students/class-homeroom";
 import ClassManager from "@/components/students/class-manager";
 import StudentFilterBar from "@/components/students/student-filter-bar";
 import StudentImportPanel from "@/components/students/student-import-panel";
-import StudentPromotePanel from "@/components/students/student-promote-panel";
 import { StudentAddButton } from "@/components/students/student-table";
 import StudentTable from "@/components/students/student-table";
 
@@ -116,7 +115,11 @@ export default async function StudentsPage({
       <PageHeader
         eyebrow="Kesiswaan"
         title="Data Siswa"
-        description="Pilih tahun ajaran, ketuk kartu kelas untuk melihat daftar siswanya. Bisa tambah satu per satu, import dari Excel/CSV, atau naikkan kelas sekaligus."
+        description={
+          isPrincipal
+            ? "Pilih tahun ajaran, ketuk kartu kelas untuk melihat daftar siswanya. Bisa tambah satu per satu, import dari Excel/CSV, atau naikkan kelas sekaligus."
+            : "Pilih tahun ajaran, ketuk kartu kelas untuk melihat daftar siswanya. Bisa tambah siswa, isi absensi harian, dan lihat rekap kehadiran."
+        }
         actions={
           <span className="flex flex-wrap items-center gap-2">
             <Link
@@ -353,23 +356,14 @@ export default async function StudentsPage({
 
       {isPrincipal && (
         <Panel
-          title="Kenaikan Kelas"
-          description="Pindahkan banyak siswa sekaligus ke tahun ajaran berikutnya. Kelas tujuan terisi otomatis dan bisa diubah."
-        >
-          <StudentPromotePanel
-            yearOptions={data.years}
-            initialSourceYear={activeYear}
-            classOptions={masterNames}
-          />
-        </Panel>
-      )}
-
-      {isPrincipal && (
-        <Panel
           title="Import dari Excel / CSV"
           description="Punya daftar siswa di Excel? Ikuti 4 langkah mudah di bawah ini."
         >
-          <StudentImportPanel defaultYear={activeYear} yearOptions={data.years} />
+          <StudentImportPanel
+            defaultYear={activeYear}
+            yearOptions={data.years}
+            classOptions={classSuggestions}
+          />
         </Panel>
       )}
 

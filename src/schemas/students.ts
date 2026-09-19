@@ -22,8 +22,10 @@ export const academicYearSchema = z
 export const studentFormSchema = z.object({
   fullName: z.string().trim().min(1, "Nama wajib diisi").max(100),
   studentNumber: optionalText(50),
+  noInduk: optionalText(50),
   className: optionalText(50),
   gender: z.enum(["male", "female"]).optional(),
+  religion: optionalText(50),
   status: z.enum(["active", "graduated", "transferred", "dropped"]),
   academicYear: academicYearSchema,
 });
@@ -37,8 +39,10 @@ export const studentIdSchema = z
 const importRowSchema = z.object({
   full_name: z.string().trim().min(1).max(100),
   student_number: z.string().trim().max(50).nullable(),
+  no_induk: z.string().trim().max(50).nullable(),
   class_name: z.string().trim().max(50).nullable(),
   gender: z.enum(["male", "female"]).nullable(),
+  religion: z.string().trim().max(50).nullable(),
   status: z.enum(["active", "graduated", "transferred", "dropped"]),
 });
 
@@ -143,27 +147,3 @@ export const saveMyAssignmentsSchema = z.object({
   ),
 });
 
-const promoteMappingSchema = z.object({
-  /** Nama kelas asal ("" = tanpa kelas). */
-  fromClass: z.string().trim().max(50),
-  /** Nama kelas tujuan (boleh "" bila diluluskan). */
-  toClass: z.string().trim().max(50),
-  graduate: z.boolean(),
-});
-
-/** Peta kenaikan dikirim sebagai JSON (maksimal 100 kelas). */
-export const studentPromoteSchema = z.object({
-  sourceYear: academicYearSchema,
-  targetYear: academicYearSchema,
-  mappingsJson: z.preprocess(
-    (v) => {
-      if (typeof v !== "string" || v.trim() === "") return [];
-      try {
-        return JSON.parse(v);
-      } catch {
-        return v;
-      }
-    },
-    z.array(promoteMappingSchema).min(1, "Pilih minimal 1 kelas").max(100)
-  ),
-});

@@ -15,8 +15,8 @@ import {
   STUDENT_TEMPLATE_CSV,
   STUDENT_TEMPLATE_FILENAME,
   STUDENT_TEMPLATE_GUIDE,
+  gridsToStudents,
   parseStudentsCsv,
-  rowsToStudents,
   type StudentImportIssue,
   type StudentImportRow,
 } from "@/lib/students";
@@ -54,9 +54,11 @@ function downloadBlob(blob: Blob, filename: string) {
 
 const TEMPLATE_HEADERS = [
   "nama_lengkap",
-  "nis",
+  "no_induk",
+  "nisn",
   "kelas",
   "jenis_kelamin",
+  "agama",
   "status",
 ];
 
@@ -68,15 +70,20 @@ const TEMPLATE_HEADERS = [
 export default function StudentImportPanel({
   defaultYear,
   yearOptions,
+  classOptions,
 }: {
   defaultYear: string;
   yearOptions: string[];
+  /** Daftar kelas untuk pilihan + pemeriksaan tulisan kelas di file. */
+  classOptions: string[];
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
   const fileRef = useRef<HTMLInputElement | null>(null);
 
   const [targetYear, setTargetYear] = useState(defaultYear);
+  // "" = ikuti tulisan di file per baris; selain itu timpa semua baris.
+  const [targetClass, setTargetClass] = useState("");
   const [fileName, setFileName] = useState<string | null>(null);
   const [parsing, setParsing] = useState(false);
   const [valid, setValid] = useState<StudentImportRow[]>([]);
@@ -171,31 +178,24 @@ export default function StudentImportPanel({
         const XLSX = await import("xlsx");
         const buf = await file.arrayBuffer();
         const wb = XLSX.read(buf, { type: "array" });
-        const sheet = wb.Sheets[wb.SheetNames[0]];
-        if (!sheet) throw new Error("empty");
-        const grid = XLSX.utils.sheet_to_json<string[]>(sheet, {
-          header: 1,
-          defval: "",
-          raw: false,
-        });
-        const strings = grid.map((r) =>
-          (Array.isArray(r) ? r : []).map((c) => String(c ?? "").trim())
-        );
-        const nonEmpty = strings.filter((r) => r.some((c) => c !== ""));
-        if (nonEmpty.length < 2) {
-          setValid([]);
-          setIssues([
-            {
-              rowNumber: 1,
-              message:
-                "Hanya ada judul tanpa isi. Tambahkan minimal 1 baris data siswa di bawah judul.",
-            },
-          ]);
-        } else {
-          const result = rowsToStudents(nonEmpty[0], nonEmpty.slice(1));
-          setValid(result.valid);
-          setIssues(result.issues);
-        }
+        // Baca SEMUA sheet (mis. satu sheet per kelas) — bukan cuma yang pertama.
+        const sheets = wb.SheetNames.map((name) => {
+          const grid = XLSX.utils.sheet_to_json<string[]>(wb.Sheets[name], {
+            header: 1,
+            defval: "",
+            raw: false,
+          });
+          return {
+            name,
+            grid: grid.map((r) =>
+              (Array.isArray(r) ? r : []).map((c) => String(c ?? "").trim())
+            ),
+          };
+        }).filter((s) => s.grid.some((r) => r.some((c) => c !== "")));
+        if (sheets.length === 0) throw new Error("empty");
+        const result = gridsToStudents(sheets);
+        setValid(result.valid);
+        setIssues(result.issues);
       }
       setParsed(true);
     } catch {
@@ -213,9 +213,24 @@ export default function StudentImportPanel({
     }
   }
 
-  const rowsJson = JSON.stringify(valid);
+  // Baris efektif: timpa kelas bila pengguna memilih kelas tertentu.
+  const effectiveRows = targetClass
+    ? valid.map((r) => ({ ...r, class_name: targetClass }))
+    : valid;
+  const rowsJson = JSON.stringify(effectiveRows);
   const shownIssues = issues.slice(0, 10);
-  const sampleRows = valid.slice(0, 8);
+  const sampleRows = effectiveRows.slice(0, 8);
+
+  // Ringkasan kelas apa saja yang tertulis di file + tandai yang asing.
+  const knownLower = new Set(classOptions.map((c) => c.toLowerCase()));
+  const classSummary = new Map<string, number>();
+  for (const r of effectiveRows) {
+    const key = (r.class_name ?? "").trim() || "(tanpa kelas)";
+    classSummary.set(key, (classSummary.get(key) ?? 0) + 1);
+  }
+  const unknownClasses = Array.from(classSummary.keys()).filter(
+    (k) => k !== "(tanpa kelas)" && !knownLower.has(k.toLowerCase())
+  );
 
   return (
     <div className="space-y-5">
@@ -225,6 +240,12 @@ export default function StudentImportPanel({
         <p className="mt-1">
           Isi data siswa di file contoh ini. Baris pertama (judul kolom)
           jangan diubah.
+        </p>
+        <p className="mt-1">
+          File sendiri juga bisa dipakai: kop/judul di atas tabel dan banyak
+          sheet (mis. satu sheet per kelas) tetap terbaca — kelas diambil
+          dari tulisan “Kelas : …” di tiap sheet. Baris rekap seperti
+          “L=12, P=22” otomatis dilewati karena jumlah L/P dihitung sistem.
         </p>
         <div className="mt-3 grid gap-2 sm:flex">
           <button
@@ -278,8 +299,31 @@ export default function StudentImportPanel({
           </select>
         </div>
         <div className="space-y-1.5">
+          <label htmlFor="imp-kelas" className="text-[15px] font-semibold">
+            Langkah 2b — Kelas untuk data ini
+          </label>
+          <select
+            id="imp-kelas"
+            value={targetClass}
+            onChange={(e) => setTargetClass(e.target.value)}
+            className={inputClass}
+          >
+            <option value="">Ikuti tulisan di file (per baris)</option>
+            {classOptions.map((c) => (
+              <option key={c} value={c}>
+                Samakan ke Kelas {c}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-muted-foreground">
+            {targetClass
+              ? `Semua baris akan dimasukkan ke Kelas ${targetClass}.`
+              : "Setiap baris memakai tulisan kelasnya masing-masing."}
+          </p>
+        </div>
+        <div className="space-y-1.5 sm:col-span-2">
           <label htmlFor="imp-file" className="text-[15px] font-semibold">
-            Langkah 2b — Pilih file yang sudah diisi
+            Langkah 2c — Pilih file yang sudah diisi
           </label>
           <input
             id="imp-file"
@@ -312,6 +356,12 @@ export default function StudentImportPanel({
               <CheckCircle2 className="h-4 w-4" aria-hidden />
               Siap masuk: {valid.length}
             </span>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-sky-100 px-3 py-1 text-sm font-semibold text-sky-800">
+              L: {effectiveRows.filter((r) => r.gender === "male").length} • P:{" "}
+              {effectiveRows.filter((r) => r.gender === "female").length}
+              {effectiveRows.some((r) => !r.gender) &&
+                ` • Kosong: ${effectiveRows.filter((r) => !r.gender).length}`}
+            </span>
             {issues.length > 0 && (
               <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-3 py-1 text-sm font-semibold text-amber-800">
                 <AlertTriangle className="h-4 w-4" aria-hidden />
@@ -319,6 +369,30 @@ export default function StudentImportPanel({
               </span>
             )}
           </div>
+
+          {classSummary.size > 0 && (
+            <div
+              className={
+                unknownClasses.length > 0
+                  ? "rounded-lg border border-amber-600/25 bg-amber-50 p-3 text-sm text-amber-900"
+                  : "rounded-lg border bg-muted/40 p-3 text-sm text-muted-foreground"
+              }
+            >
+              <p className="font-bold">
+                Kelas di file:{" "}
+                {Array.from(classSummary.entries())
+                  .map(([k, n]) => `${k} (${n})`)
+                  .join(", ")}
+              </p>
+              {unknownClasses.length > 0 && (
+                <p className="mt-1">
+                  Awas, tulisan {unknownClasses.map((k) => `“${k}”`).join(", ")}{" "}
+                  tidak ada di Daftar Kelas — mungkin salah ketik. Perbaiki di
+                  file, atau pilih “Samakan ke Kelas …” di Langkah 2b.
+                </p>
+              )}
+            </div>
+          )}
 
           {issues.length > 0 && (
             <ul className="space-y-1.5 rounded-lg border border-amber-600/25 bg-amber-50 p-3 text-sm text-amber-900">
@@ -338,13 +412,14 @@ export default function StudentImportPanel({
 
           {sampleRows.length > 0 && (
             <div className="overflow-x-auto rounded-lg border">
-              <table className="w-full min-w-[560px] text-left text-sm">
+              <table className="w-full min-w-[680px] text-left text-sm">
                 <thead>
                   <tr className="border-b bg-muted/40 text-muted-foreground">
                     <th className="px-3 py-2 font-semibold">Nama</th>
-                    <th className="px-3 py-2 font-semibold">NIS</th>
+                    <th className="px-3 py-2 font-semibold">No. Induk</th>
+                    <th className="px-3 py-2 font-semibold">NISN</th>
                     <th className="px-3 py-2 font-semibold">Kelas</th>
-                    <th className="px-3 py-2 font-semibold">L/P</th>
+                    <th className="px-3 py-2 font-semibold">Agama</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -352,13 +427,16 @@ export default function StudentImportPanel({
                     <tr key={i} className="border-b last:border-0">
                       <td className="px-3 py-2 font-medium">{r.full_name}</td>
                       <td className="px-3 py-2 text-muted-foreground">
+                        {r.no_induk ?? "—"}
+                      </td>
+                      <td className="px-3 py-2 text-muted-foreground">
                         {r.student_number ?? "—"}
                       </td>
                       <td className="px-3 py-2 text-muted-foreground">
                         {r.class_name ?? "—"}
                       </td>
                       <td className="px-3 py-2 text-muted-foreground">
-                        {r.gender === "male" ? "L" : r.gender === "female" ? "P" : "—"}
+                        {r.religion ?? "—"}
                       </td>
                     </tr>
                   ))}

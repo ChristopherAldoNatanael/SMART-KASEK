@@ -7,11 +7,8 @@ import {
   bulkDeleteStudents,
   createStudent,
   deleteStudent,
-  getPromotePreview,
   importStudents,
-  promoteStudents,
   updateStudent,
-  type PromotePreview,
 } from "@/services/student.service";
 import { saveAttendance } from "@/services/student-attendance.service";
 import { assignHomeroom } from "@/services/teacher.service";
@@ -30,7 +27,6 @@ import {
   setSchoolClassActiveSchema,
 } from "@/schemas/school-classes";
 import {
-  academicYearSchema,
   assignHomeroomSchema,
   bulkDeleteStudentsSchema,
   firstStudentIssueMessage,
@@ -39,7 +35,6 @@ import {
   studentFormSchema,
   studentIdSchema,
   studentImportSchema,
-  studentPromoteSchema,
 } from "@/schemas/students";
 
 export type StudentActionState = {
@@ -76,8 +71,10 @@ export async function createStudentAction(
   const parsed = studentFormSchema.safeParse({
     fullName: formData.get("fullName"),
     studentNumber: formData.get("studentNumber"),
+    noInduk: formData.get("noInduk"),
     className: formData.get("className"),
     gender: formData.get("gender") || undefined,
+    religion: formData.get("religion"),
     status: formData.get("status") || "active",
     academicYear: formData.get("academicYear"),
   });
@@ -87,8 +84,10 @@ export async function createStudentAction(
     const row = await createStudent({
       fullName: parsed.data.fullName,
       studentNumber: parsed.data.studentNumber,
+      noInduk: parsed.data.noInduk,
       className: parsed.data.className,
       gender: parsed.data.gender,
+      religion: parsed.data.religion,
       status: parsed.data.status,
       academicYear: parsed.data.academicYear,
     });
@@ -121,8 +120,10 @@ export async function updateStudentAction(
   const parsed = studentFormSchema.safeParse({
     fullName: formData.get("fullName"),
     studentNumber: formData.get("studentNumber"),
+    noInduk: formData.get("noInduk"),
     className: formData.get("className"),
     gender: formData.get("gender") || undefined,
+    religion: formData.get("religion"),
     status: formData.get("status") || "active",
     academicYear: formData.get("academicYear"),
   });
@@ -132,8 +133,10 @@ export async function updateStudentAction(
     const row = await updateStudent(idParsed.data, {
       fullName: parsed.data.fullName,
       studentNumber: parsed.data.studentNumber,
+      noInduk: parsed.data.noInduk,
       className: parsed.data.className,
       gender: parsed.data.gender,
+      religion: parsed.data.religion,
       status: parsed.data.status,
       academicYear: parsed.data.academicYear,
     });
@@ -175,89 +178,6 @@ export async function deleteStudentAction(
   } catch (error) {
     console.error("deleteStudentAction error:", error);
     return fail(error instanceof Error ? error.message : "Gagal menghapus data siswa");
-  }
-}
-
-/**
- * Daftar kelas tahun asal untuk panel kenaikan kelas.
- * Dipanggil langsung dari browser (bukan lewat form).
- */
-export async function getPromoteClassesAction(
-  sourceYear: string
-): Promise<{ ok: boolean; error: string | null; classes: PromotePreview }> {
-  const yearParsed = academicYearSchema.safeParse(sourceYear);
-  if (!yearParsed.success) {
-    return { ok: false, error: "Tahun ajaran tidak valid", classes: [] };
-  }
-  try {
-    const user = await requireUser();
-    if (!user.schoolId) {
-      return { ok: false, error: "Akun Anda belum terhubung ke sekolah", classes: [] };
-    }
-    const classes = await getPromotePreview(yearParsed.data);
-    return { ok: true, error: null, classes };
-  } catch (error) {
-    console.error("getPromoteClassesAction error:", error);
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : "Gagal memuat daftar kelas",
-      classes: [],
-    };
-  }
-}
-
-/** Proses kenaikan kelas sesuai peta yang diisi pengguna. */
-export async function promoteStudentsAction(
-  _prev: StudentActionState,
-  formData: FormData
-): Promise<StudentActionState> {
-  const blocked = await requireStudentAccess();
-  if (blocked) return fail(blocked);
-
-  const parsed = studentPromoteSchema.safeParse({
-    sourceYear: formData.get("sourceYear"),
-    targetYear: formData.get("targetYear"),
-    mappingsJson: formData.get("mappingsJson"),
-  });
-  if (!parsed.success) return fail(firstStudentIssueMessage(parsed.error));
-
-  try {
-    const outcome = await promoteStudents({
-      sourceYear: parsed.data.sourceYear,
-      targetYear: parsed.data.targetYear,
-      mappings: parsed.data.mappingsJson.map((m) => ({
-        fromClass: m.fromClass || null,
-        toClass: m.toClass || null,
-        graduate: m.graduate,
-      })),
-    });
-    await logAuditEvent({
-      action: "promote",
-      entity: "students",
-      newData: {
-        source_year: parsed.data.sourceYear,
-        target_year: parsed.data.targetYear,
-        moved: outcome.moved,
-        graduated: outcome.graduated,
-        skipped: outcome.skipped,
-      },
-    });
-    revalidatePath("/students");
-
-    const parts = [];
-    if (outcome.moved > 0)
-      parts.push(`Naik kelas: ${outcome.moved} siswa ke tahun ${parsed.data.targetYear}`);
-    if (outcome.graduated > 0) parts.push(`Lulus: ${outcome.graduated} siswa`);
-    if (outcome.skipped > 0) parts.push(`Dilewati (sudah ada): ${outcome.skipped}`);
-    if (parts.length === 0) {
-      return fail(
-        `Tidak ada siswa aktif pada tahun ${parsed.data.sourceYear} untuk diproses`
-      );
-    }
-    return succeed(`${parts.join(". ")}.`);
-  } catch (error) {
-    console.error("promoteStudentsAction error:", error);
-    return fail(error instanceof Error ? error.message : "Gagal memproses kenaikan kelas");
   }
 }
 

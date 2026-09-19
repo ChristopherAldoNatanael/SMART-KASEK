@@ -50,6 +50,127 @@ export type MyProfileData = {
   coachings: MyCoaching[];
 };
 
+export type MyAccount = {
+  fullName: string;
+  email: string;
+  role: string;
+  schoolName: string | null;
+  isActive: boolean;
+  joinedAt: string;
+  /** Cara masuk: google (tanpa kata sandi) atau email (pakai kata sandi). */
+  loginWith: "google" | "email";
+};
+
+/**
+ * Data "Akun Saya" untuk semua peran: nama, email, peran, sekolah.
+ * Dibaca dari baris profil milik sendiri (RLS: own-select).
+ */
+export async function getMyAccount(): Promise<MyAccount | null> {
+  const user = await getCurrentUser();
+  if (!user) return null;
+  const supabase = await createClient();
+  // user.id = ID baris profiles (lihat lib/auth) — bukan auth_user_id.
+  const { data: profile, error } = await supabase
+    .from("profiles")
+    .select("full_name, email, role, is_active, created_at, school_id")
+    .eq("id", user.id)
+    .single();
+  if (error || !profile) return null;
+  const row = profile as {
+    full_name: string;
+    email: string;
+    role: string;
+    is_active: boolean;
+    created_at: string;
+    school_id: string | null;
+  };
+  let schoolName: string | null = null;
+  if (row.school_id) {
+    const { data: school } = await supabase
+      .from("schools")
+      .select("name")
+      .eq("id", row.school_id)
+      .single();
+    schoolName = (school as { name?: string } | null)?.name ?? null;
+  }
+  const {
+    data: { user: authUser },
+  } = await supabase.auth.getUser();
+  const loginWith =
+    (authUser?.app_metadata as { provider?: string } | null)?.provider ===
+    "google"
+      ? "google"
+      : "email";
+  return {
+    fullName: row.full_name,
+    email: row.email || user.email,
+    role: row.role,
+    schoolName,
+    isActive: row.is_active,
+    joinedAt: row.created_at,
+    loginWith,
+  };
+}
+
+/** Ubah nama lengkap sendiri (semua peran, RLS: own-update). */
+export async function updateMyAccountName(fullName: string): Promise<void> {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("Sesi berakhir. Silakan login kembali.");
+  const clean = fullName.trim();
+  if (clean.length < 3) throw new Error("Nama minimal 3 karakter");
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("profiles")
+    .update({ full_name: clean.slice(0, 200) })
+    .eq("id", user.id);
+  if (error) throw new Error(error.message);
+}
+
+/**
+ * Ubah email sendiri: Auth dulu (mengirim konfirmasi ke alamat baru
+ * bila verifikasi email aktif), lalu baris profil agar tampilan sinkron.
+ */
+export async function updateMyAccountEmail(email: string): Promise<void> {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("Sesi berakhir. Silakan login kembali.");
+  const clean = email.trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean)) {
+    throw new Error("Alamat email tidak valid");
+  }
+  const supabase = await createClient();
+  const { error: authError } = await supabase.auth.updateUser({ email: clean });
+  if (authError) throw new Error(authError.message);
+  const { error } = await supabase
+    .from("profiles")
+    .update({ email: clean })
+    .eq("id", user.id);
+  if (error) throw new Error(error.message);
+}
+
+/**
+ * Ganti kata sandi sendiri (minimal 6 karakter).
+ * Khusus login email — akun Google tidak memakai kata sandi.
+ */
+export async function updateMyPassword(password: string): Promise<void> {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("Sesi berakhir. Silakan login kembali.");
+  if (password.length < 6) throw new Error("Kata sandi minimal 6 karakter");
+  const supabase = await createClient();
+  const {
+    data: { user: authUser },
+  } = await supabase.auth.getUser();
+  if (
+    (authUser?.app_metadata as { provider?: string } | null)?.provider ===
+    "google"
+  ) {
+    throw new Error(
+      "Akun ini masuk dengan Google sehingga tidak memakai kata sandi"
+    );
+  }
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) throw new Error(error.message);
+}
+
 /**
  * All "Profil Saya" data for the logged-in teacher, scoped to their
  * own teachers row. Returns null when the account isn't linked to
