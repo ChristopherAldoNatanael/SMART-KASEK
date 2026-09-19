@@ -51,6 +51,10 @@ export const toggleActiveSchema = z.object({
   ),
 });
 
+export const deleteTeacherSchema = z.object({
+  teacherId: z.string().uuid("Guru tidak valid"),
+});
+
 export function firstIssueMessage(error: z.ZodError): string {
   return error.issues[0]?.message ?? "Input tidak valid";
 }

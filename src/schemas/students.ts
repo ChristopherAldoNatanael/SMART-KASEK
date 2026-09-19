@@ -62,6 +62,33 @@ export function firstStudentIssueMessage(error: z.ZodError): string {
   return error.issues[0]?.message ?? "Input tidak valid";
 }
 
+const classNameListSchema = z.preprocess(
+  (v) => {
+    if (typeof v !== "string" || v.trim() === "") return [];
+    try {
+      const parsed: unknown = JSON.parse(v);
+      return Array.isArray(parsed) ? parsed : v;
+    } catch {
+      return v;
+    }
+  },
+  z.array(z.string().trim().max(50)).min(1, "Pilih minimal 1 kelas").max(100)
+);
+
+/**
+ * Hapus massal per kelas. expectedTotal = jumlah yang diketik pengguna
+ * di layar — server menolak bila jumlah di database sudah berubah
+ * (mencegah hapus berdasarkan tampilan basi).
+ */
+export const bulkDeleteStudentsSchema = z.object({
+  academicYear: academicYearSchema,
+  classesJson: classNameListSchema,
+  expectedTotal: z.preprocess(
+    (v) => (typeof v === "string" && v.trim() !== "" ? Number(v) : v),
+    z.number().int().min(0)
+  ),
+});
+
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 const attendanceItemSchema = z.object({

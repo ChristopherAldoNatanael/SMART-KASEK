@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { hasRole } from "@/lib/permissions";
 import { getTeachers } from "@/services/teacher.service";
 import TeacherActiveToggle from "@/components/teachers/teacher-active-toggle";
+import TeacherDeleteButton from "@/components/teachers/teacher-delete-button";
 import {
   Badge,
   Empty,
@@ -90,6 +91,12 @@ export default async function TeachersPage() {
                       <TeacherActiveToggle
                         teacherId={teacher.id}
                         isActive={teacher.profile?.is_active ?? false}
+                      />
+                    )}
+                    {canManage && (
+                      <TeacherDeleteButton
+                        teacherId={teacher.id}
+                        teacherName={teacher.profile?.full_name ?? "Guru ini"}
                       />
                     )}
                   </div>

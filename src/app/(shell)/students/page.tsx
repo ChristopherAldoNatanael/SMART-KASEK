@@ -19,6 +19,7 @@ import {
 import { allowedClassesFor, currentAcademicYear } from "@/lib/students";
 import { Empty, PageHeader, Panel } from "@/components/common";
 import { cn } from "@/lib/utils";
+import BulkDeleteClasses from "@/components/students/bulk-delete-classes";
 import ClassHomeroom from "@/components/students/class-homeroom";
 import ClassManager from "@/components/students/class-manager";
 import StudentFilterBar from "@/components/students/student-filter-bar";
@@ -138,7 +139,16 @@ export default async function StudentsPage({
 
       <StudentFilterBar
         years={data.years}
-        classes={data.classes}
+        classes={
+          // Kepala Sekolah: gabung Daftar Kelas + yang sudah ada siswanya,
+          // agar kelas yang baru didaftarkan langsung bisa dipilih.
+          // Guru: tetap hanya kelasnya sendiri (tidak dibocorkan).
+          isPrincipal
+            ? Array.from(new Set([...masterNames, ...data.classes])).sort((a, b) =>
+                a.localeCompare(b, "id")
+              )
+            : data.classes
+        }
         initial={{ tahun: activeYear, kelas: activeClass, cari: activeSearch }}
       />
 
@@ -176,8 +186,17 @@ export default async function StudentsPage({
         </h3>
         {data.classCounts.length === 0 ? (
           <p className="rounded-xl border border-dashed p-4 text-[15px] text-muted-foreground">
-            Belum ada kelas pada tahun {activeYear}. Tambahkan siswa baru atau
-            import dari Excel/CSV di bawah.
+            {isPrincipal ? (
+              <>
+                Belum ada kelas pada tahun {activeYear}. Tambahkan siswa baru
+                atau import dari Excel/CSV di bawah.
+              </>
+            ) : (
+              <>
+                Belum ada siswa di kelas Anda pada tahun {activeYear}.
+                Tambahkan dengan tombol Tambah siswa di atas.
+              </>
+            )}
           </p>
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
@@ -271,8 +290,16 @@ export default async function StudentsPage({
       ) : data.stats.total === 0 ? (
         <Empty
           icon={Users}
-          title={`Belum ada data siswa tahun ${activeYear}`}
-          description="Tambahkan dengan tombol di atas, import dari Excel/CSV, atau proses kenaikan kelas dari tahun sebelumnya di bawah."
+          title={
+            isPrincipal
+              ? `Belum ada data siswa tahun ${activeYear}`
+              : `Belum ada data siswa di kelas Anda tahun ${activeYear}`
+          }
+          description={
+            isPrincipal
+              ? "Tambahkan dengan tombol di atas, import dari Excel/CSV, atau proses kenaikan kelas dari tahun sebelumnya di bawah."
+              : "Tambahkan dengan tombol Tambah siswa di atas."
+          }
         />
       ) : data.rows.length === 0 ? (
         <Empty
@@ -324,25 +351,38 @@ export default async function StudentsPage({
         </Panel>
       )}
 
-      {!noAccess && (
+      {isPrincipal && (
         <Panel
           title="Kenaikan Kelas"
           description="Pindahkan banyak siswa sekaligus ke tahun ajaran berikutnya. Kelas tujuan terisi otomatis dan bisa diubah."
         >
-        <StudentPromotePanel
-          yearOptions={data.years}
-          initialSourceYear={activeYear}
-          classOptions={masterNames}
-        />
+          <StudentPromotePanel
+            yearOptions={data.years}
+            initialSourceYear={activeYear}
+            classOptions={masterNames}
+          />
         </Panel>
       )}
 
-      {!noAccess && (
+      {isPrincipal && (
         <Panel
           title="Import dari Excel / CSV"
           description="Punya daftar siswa di Excel? Ikuti 4 langkah mudah di bawah ini."
         >
           <StudentImportPanel defaultYear={activeYear} yearOptions={data.years} />
+        </Panel>
+      )}
+
+      {isPrincipal && (
+        <Panel
+          title="Hapus Data Kelas"
+          description="Untuk Kepala Sekolah. Menghapus permanen data siswa per kelas pada tahun ajaran yang dipilih — bertahap dan hati-hati."
+        >
+          <BulkDeleteClasses
+            key={activeYear}
+            academicYear={activeYear}
+            classes={data.classCounts.map((c) => ({ name: c.name, total: c.total }))}
+          />
         </Panel>
       )}
     </div>

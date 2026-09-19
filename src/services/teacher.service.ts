@@ -309,34 +309,55 @@ export async function setTeacherActive(
   }
 }
 
-export async function deleteTeacher(id: string): Promise<void> {  const user = await getCurrentUser();
+/**
+ * Hapus guru dari sekolah (principal/admin, se-sekolah sendiri).
+ * - Akun sendiri tidak bisa dihapus.
+ * - Baris guru dihapus dulu (CASCADE: supervisi, coaching, nilai,
+ *   growth, modul/jurnal/asesmen, daftar ajar), lalu profilnya
+ *   (referensi penilai dinullkan via SET NULL).
+ * - Akun login (auth) sengaja TIDAK dihapus: project ini tanpa
+ *   service-role key sehingga auth.admin tak bisa dipakai. Bekas
+ *   guru yang login lagi diarahkan ke onboarding (belum terhubung
+ *   ke sekolah). Untuk nonaktif sementara, pakai setTeacherActive.
+ */
+export async function deleteTeacher(id: string): Promise<{ fullName: string }> {
+  const user = await getCurrentUser();
   if (!user?.schoolId) throw new Error("No school access");
-
-  const supabase = await createClient();
+  if (user.role !== "principal" && user.role !== "admin") {
+    throw new Error("Hanya Kepala Sekolah yang dapat menghapus data guru");
+  }
 
   const teacher = await getTeacherById(id);
   if (!teacher) {
     throw new Error("Guru tidak ditemukan");
   }
-
-  if (teacher.profile_id) {
-    const { error: authError } = await supabase.auth.admin.deleteUser(
-      teacher.profile_id as unknown as string
-    );
-    if (authError) {
-      throw new Error(`Gagal hapus akun: ${authError.message}`);
-    }
+  if (teacher.profile_id && teacher.profile_id === user.id) {
+    throw new Error("Akun sendiri tidak dapat dihapus");
   }
 
-  const { error } = await supabase
+  const supabase = await createClient();
+  const fullName = teacher.profile?.full_name ?? "Guru";
+
+  const { error: teacherError } = await supabase
     .from("teachers")
     .delete()
     .eq("id", id)
     .eq("school_id", user.schoolId);
-
-  if (error) {
-    throw new Error(error.message);
+  if (teacherError) {
+    throw new Error(teacherError.message);
   }
+
+  if (teacher.profile_id) {
+    const { error: profileError } = await supabase
+      .from("profiles")
+      .delete()
+      .eq("id", teacher.profile_id);
+    if (profileError) {
+      throw new Error(profileError.message);
+    }
+  }
+
+  return { fullName };
 }
 
 /**

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/auth";
 import { logAuditEvent } from "@/services/audit.service";
 import {
+  bulkDeleteStudents,
   createStudent,
   deleteStudent,
   getPromotePreview,
@@ -31,6 +32,7 @@ import {
 import {
   academicYearSchema,
   assignHomeroomSchema,
+  bulkDeleteStudentsSchema,
   firstStudentIssueMessage,
   saveAttendanceSchema,
   saveMyAssignmentsSchema,
@@ -476,6 +478,50 @@ export async function deleteSchoolClassAction(
   } catch (error) {
     console.error("deleteSchoolClassAction error:", error);
     return fail(error instanceof Error ? error.message : "Gagal menghapus kelas");
+  }
+}
+
+/**
+ * Hapus massal siswa per kelas dalam 1 tahun ajaran (Kepala Sekolah).
+ * Server menghitung ulang jumlah dan menolak bila berubah —
+ * pengaman terakhir bila layar sudah basi.
+ */
+export async function bulkDeleteStudentsAction(
+  _prev: StudentActionState,
+  formData: FormData
+): Promise<StudentActionState> {
+  const blocked = await requireStudentAccess();
+  if (blocked) return fail(blocked);
+
+  const parsed = bulkDeleteStudentsSchema.safeParse({
+    academicYear: formData.get("academicYear"),
+    classesJson: formData.get("classesJson"),
+    expectedTotal: formData.get("expectedTotal"),
+  });
+  if (!parsed.success) return fail(firstStudentIssueMessage(parsed.error));
+
+  try {
+    const outcome = await bulkDeleteStudents({
+      academicYear: parsed.data.academicYear,
+      classNames: parsed.data.classesJson,
+      expectedTotal: parsed.data.expectedTotal,
+    });
+    await logAuditEvent({
+      action: "bulk_delete",
+      entity: "students",
+      newData: {
+        academic_year: parsed.data.academicYear,
+        classes: outcome.classes,
+        deleted: outcome.deleted,
+      },
+    });
+    revalidatePath("/students");
+    return succeed(
+      `${outcome.deleted} siswa dari ${outcome.classes.length} kelas (tahun ${parsed.data.academicYear}) sudah dihapus permanen.`
+    );
+  } catch (error) {
+    console.error("bulkDeleteStudentsAction error:", error);
+    return fail(error instanceof Error ? error.message : "Gagal menghapus data");
   }
 }
 

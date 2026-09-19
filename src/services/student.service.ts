@@ -140,6 +140,64 @@ export type ImportOutcome = {
   failed: { name: string; message: string }[];
 };
 
+/* ---------------------------- Hapus massal ------------------------------ */
+
+/**
+ * Hapus permanen seluruh siswa pada kelas-kelas terpilih dalam 1 tahun
+ * ajaran (Kepala Sekolah). Pengaman ganda:
+ * - expectedTotal harus sama persis dengan jumlah di database saat
+ *   eksekusi — bila data berubah (ada yang menambah/menghapus),
+ *   proses ditolak agar tidak menghapus berdasarkan layar basi.
+ * - Hanya baris milik sekolah yang disentuh (school_id selalu dicek).
+ */
+export async function bulkDeleteStudents(input: {
+  academicYear: string;
+  classNames: string[];
+  expectedTotal: number;
+}): Promise<{ deleted: number; classes: string[] }> {
+  const user = await getCurrentUser();
+  if (!user?.schoolId) throw new Error("Akun Anda belum terhubung ke sekolah");
+  if (user.role !== "principal" && user.role !== "admin") {
+    throw new Error("Hanya Kepala Sekolah yang dapat menghapus data kelas");
+  }
+
+  // "" = kelompok "Tanpa kelas", jadi sengaja tidak dibuang.
+  const targets = Array.from(new Set(input.classNames.map((c) => c.trim())));
+  if (targets.length === 0) throw new Error("Pilih minimal 1 kelas");
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("students")
+    .select("id, class_name, academic_year")
+    .eq("school_id", user.schoolId);
+  if (error) throw new Error(error.message);
+
+  const matched = ((data ?? []) as Pick<Student, "id" | "class_name" | "academic_year">[]).filter(
+    (r) =>
+      normYear(r) === input.academicYear &&
+      targets.includes((r.class_name ?? "").trim())
+  );
+
+  if (matched.length === 0) {
+    throw new Error("Tidak ada data siswa pada kelas dan tahun tersebut");
+  }
+  if (matched.length !== input.expectedTotal) {
+    throw new Error(
+      `Jumlah data berubah (${input.expectedTotal} → ${matched.length}). Muat ulang halaman dan periksa lagi sebelum menghapus.`
+    );
+  }
+
+  const ids = matched.map((r) => r.id);
+  const { error: delError } = await supabase
+    .from("students")
+    .delete()
+    .eq("school_id", user.schoolId)
+    .in("id", ids);
+  if (delError) throw new Error(delError.message);
+
+  return { deleted: ids.length, classes: targets };
+}
+
 /* ------------------------------ Kenaikan kelas --------------------------- */
 
 export type PromotePreview = {

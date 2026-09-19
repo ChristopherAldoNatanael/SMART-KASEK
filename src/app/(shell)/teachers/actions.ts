@@ -13,12 +13,13 @@ import {
   upsertCompetencySchema,
 } from "@/schemas/competency";
 import {
+  deleteTeacherSchema,
   firstIssueMessage as teachingIssueMessage,
   toggleActiveSchema,
   updateProfileSchema,
   updateTeachingSchema,
 } from "@/schemas/teacher";
-import { getOwnTeacherId, setTeacherActive, updateTeacher } from "@/services/teacher.service";
+import { deleteTeacher, getOwnTeacherId, setTeacherActive, updateTeacher } from "@/services/teacher.service";
 
 export type TeacherActionState = {
   ok: boolean;
@@ -269,5 +270,49 @@ export async function toggleActiveAction(
 
   revalidatePath("/teachers");
   revalidatePath(`/teachers/${parsed.data.teacherId}`);
+  return { ok: true, error: null };
+}
+
+/**
+ * Hapus guru dari sekolah (principal only).
+ * Permanen: riwayat supervisi/coaching/nilai ikut terhapus.
+ * Untuk nonaktif sementara, gunakan toggleActiveAction.
+ */
+export async function deleteTeacherAction(
+  _prev: TeacherActionState,
+  formData: FormData
+): Promise<TeacherActionState> {
+  const user = await requireUser();
+  if (!user.schoolId) {
+    return { ok: false, error: "Akun Anda belum terhubung ke sekolah." };
+  }
+  if (!hasRole(user.role, "principal")) {
+    return { ok: false, error: "Hanya Kepala Sekolah yang dapat menghapus data guru." };
+  }
+
+  const parsed = deleteTeacherSchema.safeParse({
+    teacherId: formData.get("teacherId"),
+  });
+  if (!parsed.success) {
+    return { ok: false, error: teachingIssueMessage(parsed.error) };
+  }
+
+  try {
+    const { fullName } = await deleteTeacher(parsed.data.teacherId);
+    await logAuditEvent({
+      action: "delete",
+      entity: "teachers",
+      entityId: parsed.data.teacherId,
+      newData: { full_name: fullName },
+    });
+  } catch (error) {
+    console.error("deleteTeacherAction error:", error);
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Gagal menghapus data guru",
+    };
+  }
+
+  revalidatePath("/teachers");
   return { ok: true, error: null };
 }
