@@ -348,10 +348,27 @@ export async function deleteSupervision(id: string): Promise<void> {
   }
 }
 
+/** Filter jenis supervisi untuk daftar & statistik halaman. */
+export type SupervisionKind = "akademik" | "manajerial" | "all";
+
+const EMPTY_SUPERVISION_STATS = {
+  total: 0,
+  draft: 0,
+  completed: 0,
+  followUp: 0,
+  closed: 0,
+  averageScore: null as number | null,
+};
+
 /**
  * Get supervision statistics for the school.
+ * kind="akademik" menghitung baris non-manajerial saja (selaras tabel
+ * /supervision). Bila kolom kind belum ada (migrasi 00022), jatuh kembali
+ * ke perilaku lama (semua baris) agar tidak error.
  */
-export async function getSupervisionStats(): Promise<{
+export async function getSupervisionStats(
+  kind: SupervisionKind = "all"
+): Promise<{
   total: number;
   draft: number;
   completed: number;
@@ -361,28 +378,46 @@ export async function getSupervisionStats(): Promise<{
 }> {
   const user = await getCurrentUser();
   if (!user?.schoolId) {
-    return { total: 0, draft: 0, completed: 0, followUp: 0, closed: 0, averageScore: null };
+    return { ...EMPTY_SUPERVISION_STATS };
   }
 
   const supabase = await createClient();
   const scope = await teacherScope(user.role, user.id, user.schoolId);
   if (scope.scoped && !scope.teacherId) {
-    return { total: 0, draft: 0, completed: 0, followUp: 0, closed: 0, averageScore: null };
+    return { ...EMPTY_SUPERVISION_STATS };
   }
 
-  let query = supabase
-    .from("supervisions")
-    .select("status, overall_score")
-    .eq("school_id", user.schoolId);
+  const fetchRows = (useKindFilter: boolean) => {
+    let query = supabase
+      .from("supervisions")
+      .select("status, overall_score")
+      .eq("school_id", user.schoolId);
 
-  if (scope.scoped && scope.teacherId) {
-    query = query.eq("teacher_id", scope.teacherId);
+    if (scope.scoped && scope.teacherId) {
+      query = query.eq("teacher_id", scope.teacherId);
+    }
+    if (useKindFilter && kind === "akademik") {
+      query = query.neq("kind", "managerial");
+    }
+    if (useKindFilter && kind === "manajerial") {
+      query = query.eq("kind", "managerial");
+    }
+    return query;
+  };
+
+  // Kolom kind belum ada (migrasi 00022) → PostgREST error → fallback
+  // ke semua baris (perilaku lama), bukan halaman error.
+  let data: { status: string; overall_score: number | null }[] | null = null;
+  try {
+    const res = await fetchRows(kind !== "all");
+    if (!res.error) data = res.data ?? [];
+  } catch {
+    data = null;
   }
-
-  const { data, error } = await query;
-
-  if (error) {
-    throw new Error(error.message);
+  if (!data) {
+    const res = await fetchRows(false);
+    if (res.error) throw new Error(res.error.message);
+    data = res.data ?? [];
   }
 
   const stats = {
@@ -414,4 +449,113 @@ export async function getSupervisionStats(): Promise<{
   }
 
   return stats;
+}
+
+export type SupervisionPageResult = {
+  rows: SupervisionWithDetails[];
+  /** Null bila total tak dapat dihitung (lingkungan tanpa migrasi lengkap). */
+  total: number | null;
+  page: number;
+  pageSize: number;
+};
+
+/**
+ * Daftar supervisi per halaman (untuk tabel /supervision).
+ * Statistik strip atas tetap lewat getSupervisionStats agar angkanya utuh.
+ */
+export async function getSupervisionsPage(
+  kind: SupervisionKind = "akademik",
+  page = 1,
+  pageSize = 20
+): Promise<SupervisionPageResult> {
+  const safePage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
+  const safeSize =
+    Number.isFinite(pageSize) && pageSize > 0
+      ? Math.min(100, Math.floor(pageSize))
+      : 20;
+
+  const user = await getCurrentUser();
+  if (!user?.schoolId) {
+    return { rows: [], total: 0, page: safePage, pageSize: safeSize };
+  }
+
+  const supabase = await createClient();
+  const scope = await teacherScope(user.role, user.id, user.schoolId);
+  if (scope.scoped && !scope.teacherId) {
+    return { rows: [], total: 0, page: safePage, pageSize: safeSize };
+  }
+
+  const applyFilters = (
+    useKindFilter: boolean,
+    base: "count" | "rows",
+    from = 0
+  ) => {
+    if (base === "count") {
+      let q = supabase
+        .from("supervisions")
+        .select("id", { count: "exact", head: true })
+        .eq("school_id", user.schoolId);
+      if (scope.scoped && scope.teacherId) {
+        q = q.eq("teacher_id", scope.teacherId);
+      }
+      if (useKindFilter && kind === "akademik") {
+        q = q.neq("kind", "managerial");
+      }
+      if (useKindFilter && kind === "manajerial") {
+        q = q.eq("kind", "managerial");
+      }
+      return q;
+    }
+    let q = supabase
+      .from("supervisions")
+      .select(
+        `
+        *,
+        teacher:teachers(id, profile:profiles(full_name)),
+        supervisor:profiles(full_name)
+      `
+      )
+      .eq("school_id", user.schoolId)
+      .order("supervision_date", { ascending: false })
+      .range(from, from + safeSize - 1);
+    if (scope.scoped && scope.teacherId) {
+      q = q.eq("teacher_id", scope.teacherId);
+    }
+    if (useKindFilter && kind === "akademik") {
+      q = q.neq("kind", "managerial");
+    }
+    if (useKindFilter && kind === "manajerial") {
+      q = q.eq("kind", "managerial");
+    }
+    return q;
+  };
+
+  // Coba dengan filter kind; bila kolom belum ada, fallback tanpa filter
+  // + saring di JS (total menjadi null → pager disembunyikan).
+  try {
+    const countRes = await applyFilters(kind !== "all", "count");
+    if (countRes.error) throw new Error(countRes.error.message);
+    const from = (safePage - 1) * safeSize;
+    const rowsRes = await applyFilters(kind !== "all", "rows", from);
+    if (rowsRes.error) throw new Error(rowsRes.error.message);
+    return {
+      rows: (rowsRes.data ?? []) as SupervisionWithDetails[],
+      total: countRes.count ?? 0,
+      page: safePage,
+      pageSize: safeSize,
+    };
+  } catch {
+    if (kind === "all") throw new Error("Gagal memuat supervisi");
+    const from = (safePage - 1) * safeSize;
+    const rowsRes = await applyFilters(false, "rows", from);
+    if (rowsRes.error) throw new Error(rowsRes.error.message);
+    const all = (rowsRes.data ?? []) as (SupervisionWithDetails & {
+      kind?: string | null;
+    })[];
+    const filtered =
+      kind === "akademik"
+        ? all.filter((r) => r.kind !== "managerial")
+        : all.filter((r) => r.kind === "managerial");
+    return { rows: filtered, total: null, page: safePage, pageSize: safeSize };
+  }
 }

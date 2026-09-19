@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/auth";
 import { hasRole } from "@/lib/permissions";
+import { checkRateLimit } from "@/lib/rate-limit";
 import { recalculateAllGrowth } from "@/services/growth.service";
 import { logAuditEvent } from "@/services/audit.service";
 
@@ -32,6 +33,16 @@ export async function recalculateAllAction(
     return {
       ok: false,
       error: "Hanya Kepala Sekolah yang dapat menghitung ulang",
+      message: null,
+    };
+  }
+
+  // Operasi berat (N guru × query) — tahan klik berulang.
+  const recalcLimit = checkRateLimit(`recalc:${user.id}`, 5, 600_000);
+  if (!recalcLimit.ok) {
+    return {
+      ok: false,
+      error: `Terlalu sering menghitung ulang. Coba lagi dalam ${recalcLimit.retryAfterSec} detik.`,
       message: null,
     };
   }

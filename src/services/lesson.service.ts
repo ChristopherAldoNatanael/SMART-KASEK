@@ -111,6 +111,107 @@ export async function getLessonPlans(): Promise<LessonPlanWithTeacher[]> {
   );
 }
 
+export type LessonPlansPageResult = {
+  rows: LessonPlanWithTeacher[];
+  total: number;
+  page: number;
+  pageSize: number;
+};
+
+/**
+ * Daftar modul ajar per halaman (untuk grid /learning).
+ * Aturan visibilitas SAMA dengan getLessonPlans; bedanya signed URL
+ * (1 panggilan Storage per baris) hanya dibuat untuk baris halaman ini.
+ * Statistik tetap lewat getLessonSubmissionStats.
+ */
+export async function getLessonPlansPage(
+  page = 1,
+  pageSize = 12
+): Promise<LessonPlansPageResult> {
+  const safePage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
+  const safeSize =
+    Number.isFinite(pageSize) && pageSize > 0
+      ? Math.min(50, Math.floor(pageSize))
+      : 12;
+  const empty = { rows: [], total: 0, page: safePage, pageSize: safeSize };
+
+  const user = await getCurrentUser();
+  if (!user?.schoolId) return empty;
+
+  const supabase = await createClient();
+  const from = (safePage - 1) * safeSize;
+
+  if (user.role === "principal" || user.role === "admin") {
+    const { data: teachers } = await supabase
+      .from("teachers")
+      .select("id, profile:profiles(full_name)")
+      .eq("school_id", user.schoolId);
+
+    const ids = (teachers ?? []).map((t) => t.id);
+    if (ids.length === 0) return empty;
+
+    const names = new Map(
+      (teachers ?? []).map((t) => [
+        t.id,
+        (t.profile as unknown as { full_name: string | null } | null)
+          ?.full_name ?? null,
+      ])
+    );
+
+    const { count, error: countError } = await supabase
+      .from("lesson_plans")
+      .select("id", { count: "exact", head: true })
+      .in("teacher_id", ids)
+      .in("status", ["published", "archived"]);
+    if (countError) throw new Error(countError.message);
+
+    const { data, error } = await supabase
+      .from("lesson_plans")
+      .select("*")
+      .in("teacher_id", ids)
+      .in("status", ["published", "archived"])
+      .order("created_at", { ascending: false })
+      .range(from, from + safeSize - 1);
+    if (error) throw new Error(error.message);
+
+    const rows = await Promise.all(
+      (data ?? []).map(async (l) => ({
+        ...l,
+        teacherName: names.get(l.teacher_id) ?? null,
+        ...(await resolveDownload(supabase, l.file_url)),
+      }))
+    );
+    return { rows, total: count ?? 0, page: safePage, pageSize: safeSize };
+  }
+
+  // Teacher: own plans only
+  const teacherId = await getOwnTeacherId(user.id, user.schoolId);
+  if (!teacherId) return empty;
+
+  const { count, error: countError } = await supabase
+    .from("lesson_plans")
+    .select("id", { count: "exact", head: true })
+    .eq("teacher_id", teacherId);
+  if (countError) throw new Error(countError.message);
+
+  const { data, error } = await supabase
+    .from("lesson_plans")
+    .select("*")
+    .eq("teacher_id", teacherId)
+    .order("created_at", { ascending: false })
+    .range(from, from + safeSize - 1);
+  if (error) throw new Error(error.message);
+
+  const rows = await Promise.all(
+    (data ?? []).map(async (l) => ({
+      ...l,
+      teacherName: user.fullName,
+      ...(await resolveDownload(supabase, l.file_url)),
+    }))
+  );
+  return { rows, total: count ?? 0, page: safePage, pageSize: safeSize };
+}
+
 /**
  * Create a lesson plan.
  * Teachers always save as themselves (teacherId is ignored for safety).

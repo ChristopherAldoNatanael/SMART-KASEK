@@ -1,9 +1,10 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { MessagesSquare, Plus, AlertTriangle, Clock } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth";
 import { hasRole } from "@/lib/permissions";
 import {
-  getCoachingSessions,
+  getCoachingSessionsPage,
   getCoachingStats,
 } from "@/services/coaching.service";
 import {
@@ -55,14 +56,41 @@ function getApproachingCount(session: {
   }).length;
 }
 
-export default async function CoachingPage() {
-  const [sessions, stats, user] = await Promise.all([
-    getCoachingSessions(),
+const PAGE_SIZE = 20;
+
+export default async function CoachingPage({
+  searchParams,
+}: {
+  searchParams?: { hal?: string };
+}) {
+  const halParam = Number.parseInt(searchParams?.hal ?? "", 10);
+  const hal =
+    Number.isFinite(halParam) && halParam > 0 ? Math.floor(halParam) : 1;
+
+  const [paged, stats, user] = await Promise.all([
+    getCoachingSessionsPage(hal, PAGE_SIZE),
     getCoachingStats(),
     getCurrentUser(),
   ]);
+  const sessions = paged.rows;
   const isLeader = user !== null && hasRole(user.role, "principal");
   const isTeacher = user?.role === "teacher";
+
+  const totalPages =
+    paged.total === null
+      ? null
+      : Math.max(1, Math.ceil(paged.total / paged.pageSize));
+
+  // Halaman di luar jangkauan → kembali ke halaman terakhir.
+  if (
+    totalPages !== null &&
+    paged.total !== null &&
+    paged.total > 0 &&
+    sessions.length === 0 &&
+    hal > 1
+  ) {
+    redirect(`/coaching?hal=${totalPages}`);
+  }
 
   return (
     <div className="space-y-6">
@@ -197,6 +225,43 @@ export default async function CoachingPage() {
             })}
           </tbody>
         </TableShell>
+      )}
+
+      {totalPages !== null && totalPages > 1 && (
+        <nav
+          aria-label="Halaman coaching"
+          className="flex flex-wrap items-center justify-between gap-2 rounded-xl border bg-card px-5 py-3 text-sm"
+        >
+          <span className="text-muted-foreground">
+            Halaman {hal} dari {totalPages} • Total {paged.total} sesi
+          </span>
+          <span className="flex gap-2">
+            {hal > 1 ? (
+              <Link
+                href={`/coaching?hal=${hal - 1}`}
+                className="rounded-md border px-3 py-1.5 font-medium transition-colors hover:bg-muted"
+              >
+                ← Sebelumnya
+              </Link>
+            ) : (
+              <span className="rounded-md border px-3 py-1.5 text-muted-foreground opacity-50">
+                ← Sebelumnya
+              </span>
+            )}
+            {hal < totalPages ? (
+              <Link
+                href={`/coaching?hal=${hal + 1}`}
+                className="rounded-md border px-3 py-1.5 font-medium transition-colors hover:bg-muted"
+              >
+                Berikutnya →
+              </Link>
+            ) : (
+              <span className="rounded-md border px-3 py-1.5 text-muted-foreground opacity-50">
+                Berikutnya →
+              </span>
+            )}
+          </span>
+        </nav>
       )}
     </div>
   );

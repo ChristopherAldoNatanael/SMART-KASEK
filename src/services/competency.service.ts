@@ -2,6 +2,8 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { requirePrincipal } from "@/lib/permissions";
+import { withRequestCache } from "@/lib/cache";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 
 type Competency = Database["public"]["Tables"]["competencies"]["Row"];
@@ -14,13 +16,10 @@ export type TeacherCompetencyWithDetails = TeacherCompetency & {
   competency: Pick<Competency, "name" | "category" | "weight"> | null;
 };
 
-/**
- * Get all master competencies.
- */
-export async function getCompetencies(): Promise<Competency[]> {
-  const supabase = await createClient();
-
-  const { data, error } = await supabase
+async function fetchActiveCompetencies(
+  db: SupabaseClient
+): Promise<Competency[]> {
+  const { data, error } = await db
     .from("competencies")
     .select("*")
     .eq("is_active", true)
@@ -30,7 +29,26 @@ export async function getCompetencies(): Promise<Competency[]> {
     throw new Error(error.message);
   }
 
-  return data;
+  return (data ?? []) as Competency[];
+}
+
+/**
+ * Get all master competencies.
+ * Master global yang jarang berubah → di-cache 10 menit (per user,
+ * tetap dalam konteks RLS). Tidak ada mutasi master di aplikasi,
+ * sehingga tidak butuh invalidasi selain TTL.
+ */
+export async function getCompetencies(): Promise<Competency[]> {
+  return withRequestCache(
+    ["competencies"],
+    600,
+    ["competencies"],
+    (db) => fetchActiveCompetencies(db),
+    async () => {
+      const supabase = await createClient();
+      return fetchActiveCompetencies(supabase as unknown as SupabaseClient);
+    }
+  );
 }
 
 /**
@@ -114,29 +132,44 @@ export async function getTeacherCompetencySummary(
   // Get all active competencies
   const competencies = await getCompetencies();
 
-  // Get latest score for each competency
-  const summary = await Promise.all(
-    competencies.map(async (competency) => {
-      const { data } = await supabase
-        .from("teacher_competencies")
-        .select("score, assessed_at, source")
-        .eq("teacher_id", teacherId)
-        .eq("competency_id", competency.id)
-        .order("assessed_at", { ascending: false })
-        .limit(1)
-        .single();
+  // Satu query untuk semua nilai guru ini (dulu N+1: satu query per
+  // kompetensi). Baris terbaru per kompetensi diambil di JS.
+  const { data: scores, error: scoresError } = await supabase
+    .from("teacher_competencies")
+    .select("competency_id, score, assessed_at, source")
+    .eq("teacher_id", teacherId)
+    .order("assessed_at", { ascending: false });
+  if (scoresError) throw new Error(scoresError.message);
 
-      return {
-        competencyId: competency.id,
-        name: competency.name,
-        category: competency.category,
-        weight: competency.weight,
-        latestScore: data?.score ?? null,
-        assessedAt: data?.assessed_at ?? null,
-        source: data?.source ?? null,
-      };
-    })
-  );
+  const latestByCompetency = new Map<
+    string,
+    { score: number | null; assessed_at: string | null; source: string | null }
+  >();
+  for (const row of (scores ?? []) as {
+    competency_id: string;
+    score: number | null;
+    assessed_at: string | null;
+    source: string | null;
+  }[]) {
+    if (!latestByCompetency.has(row.competency_id)) {
+      latestByCompetency.set(row.competency_id, {
+        score: row.score,
+        assessed_at: row.assessed_at,
+        source: row.source,
+      });
+    }
+  }
 
-  return summary;
+  return competencies.map((competency) => {
+    const latest = latestByCompetency.get(competency.id);
+    return {
+      competencyId: competency.id,
+      name: competency.name,
+      category: competency.category,
+      weight: competency.weight,
+      latestScore: latest?.score ?? null,
+      assessedAt: latest?.assessed_at ?? null,
+      source: latest?.source ?? null,
+    };
+  });
 }

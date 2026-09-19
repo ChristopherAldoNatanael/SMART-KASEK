@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import {
   ArrowLeft,
   ChevronRight,
@@ -9,7 +10,11 @@ import {
 } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth";
 import { hasRole } from "@/lib/permissions";
-import { getStudents } from "@/services/student.service";
+import {
+  getStudentListMeta,
+  getStudentRowsPage,
+  getStudents,
+} from "@/services/student.service";
 import { getTeachers } from "@/services/teacher.service";
 import { getTeacherClassAccess } from "@/services/teaching-assignment.service";
 import {
@@ -37,24 +42,66 @@ function cardsHref(tahun: string, kelas: string, cari: string): string {
   return `/students?${params.toString()}`;
 }
 
+const PAGE_SIZE = 20;
+
 export default async function StudentsPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ tahun?: string; kelas?: string; cari?: string }>;
+  searchParams?: Promise<{
+    tahun?: string;
+    kelas?: string;
+    cari?: string;
+    hal?: string;
+  }>;
 }) {
   const query = (await searchParams) ?? {};
+  const halParam = Number.parseInt(query.hal ?? "", 10);
+  const hal =
+    Number.isFinite(halParam) && halParam > 0 ? Math.floor(halParam) : 1;
   const fallbackYear = currentAcademicYear();
   // Guru hanya boleh melihat kelasnya sendiri (wali + yang diajar).
   // Null = akses penuh (Kepala Sekolah/Admin).
   const access = await getTeacherClassAccess();
 
   async function load(year: string, className: string | null) {
-    return getStudents({
+    const requestedSearch = query.cari?.trim() || null;
+    const allowed = allowedClassesFor(access, year);
+    if (allowed === null) {
+      // Kepsek/Admin: agregat ringan + baris per halaman langsung di SQL
+      // (satu-satunya pola yang memangkas full scan sekolah besar).
+      const [meta, paged] = await Promise.all([
+        getStudentListMeta(year, null),
+        getStudentRowsPage({
+          academicYear: year,
+          className,
+          search: requestedSearch,
+          page: hal,
+          pageSize: PAGE_SIZE,
+        }),
+      ]);
+      return {
+        ...meta,
+        rows: paged.rows,
+        total: paged.total,
+        page: paged.page,
+        pageSize: paged.pageSize,
+        sqlPaged: true as const,
+      };
+    }
+    // Guru: cakupan kecil milik sendiri — perilaku tidak berubah.
+    const full = await getStudents({
       academicYear: year,
       className,
-      search: query.cari?.trim() || null,
-      allowedClasses: allowedClassesFor(access, year),
+      search: requestedSearch,
+      allowedClasses: allowed,
     });
+    return {
+      ...full,
+      total: full.rows.length,
+      page: 1,
+      pageSize: Math.max(full.rows.length, 1),
+      sqlPaged: false as const,
+    };
   }
 
   let data = await load(
@@ -82,6 +129,24 @@ export default async function StudentsPage({
   const activeSearch = query.cari?.trim() || "";
   // Guru tanpa kelas terkait tahun ini (belum jadi wali & belum isi daftar ajar).
   const noAccess = !!allowedNow && allowedNow.length === 0;
+
+  const totalPages = data.sqlPaged
+    ? Math.max(1, Math.ceil(data.total / data.pageSize))
+    : 1;
+
+  function pagerHref(targetHal: number): string {
+    const params = new URLSearchParams();
+    params.set("tahun", activeYear);
+    if (activeClass) params.set("kelas", activeClass);
+    if (activeSearch) params.set("cari", activeSearch);
+    params.set("hal", String(targetHal));
+    return `/students?${params.toString()}`;
+  }
+
+  // Halaman di luar jangkauan (mis. data terhapus) → kembali ke terakhir.
+  if (data.sqlPaged && data.total > 0 && data.rows.length === 0 && hal > 1) {
+    redirect(pagerHref(totalPages));
+  }
 
   const [user, teachers] = await Promise.all([getCurrentUser(), getTeachers()]);
   const canAssignHomeroom =
@@ -316,8 +381,8 @@ export default async function StudentsPage({
         <Panel
           title={
             activeClass
-              ? `Kelas ${activeClass} — ${data.rows.length} siswa`
-              : `Semua siswa — ${data.rows.length} ditampilkan`
+              ? `Kelas ${activeClass} — ${data.total} siswa`
+              : `Semua siswa — ${data.total} ditampilkan`
           }
           description={
             activeClass
@@ -351,6 +416,42 @@ export default async function StudentsPage({
             yearOptions={data.years}
             classOptions={classSuggestions}
           />
+          {data.sqlPaged && totalPages > 1 && (
+            <nav
+              aria-label="Halaman siswa"
+              className="flex flex-wrap items-center justify-between gap-2 border-t px-4 py-3 text-sm"
+            >
+              <span className="text-muted-foreground">
+                Halaman {hal} dari {totalPages} • Total {data.total} siswa
+              </span>
+              <span className="flex gap-2">
+                {hal > 1 ? (
+                  <Link
+                    href={pagerHref(hal - 1)}
+                    className="rounded-md border px-3 py-1.5 font-medium transition-colors hover:bg-muted"
+                  >
+                    ← Sebelumnya
+                  </Link>
+                ) : (
+                  <span className="rounded-md border px-3 py-1.5 text-muted-foreground opacity-50">
+                    ← Sebelumnya
+                  </span>
+                )}
+                {hal < totalPages ? (
+                  <Link
+                    href={pagerHref(hal + 1)}
+                    className="rounded-md border px-3 py-1.5 font-medium transition-colors hover:bg-muted"
+                  >
+                    Berikutnya →
+                  </Link>
+                ) : (
+                  <span className="rounded-md border px-3 py-1.5 text-muted-foreground opacity-50">
+                    Berikutnya →
+                  </span>
+                )}
+              </span>
+            </nav>
+          )}
         </Panel>
       )}
 

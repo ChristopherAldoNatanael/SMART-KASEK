@@ -135,6 +135,180 @@ export async function getStudents(filters: StudentFilters): Promise<{
   };
 }
 
+export type StudentListMeta = {
+  years: string[];
+  classes: string[];
+  classCounts: ClassCount[];
+  stats: { total: number; male: number; female: number; classCount: number };
+};
+
+type StudentMetaRow = {
+  academic_year: string | null;
+  class_name: string | null;
+  gender: string | null;
+};
+
+/**
+ * Meta ringan untuk halaman Data Siswa (kartu kelas + filter + statistik).
+ * Hanya 3 kolom kecil — dipakai bersama getStudentRowsPage agar tabel besar
+ * tidak perlu memuat seluruh baris. allowedClasses = pembatas guru
+ * (null = akses penuh Kepsek/Admin). Logika agregasi SAMA dengan getStudents.
+ */
+export async function getStudentListMeta(
+  academicYear: string,
+  allowedClasses?: string[] | null
+): Promise<StudentListMeta> {
+  const { schoolId } = await requireSchoolUser();
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("students")
+    .select("academic_year, class_name, gender")
+    .eq("school_id", schoolId);
+  if (error) throw new Error(error.message);
+
+  const all = (data ?? []) as StudentMetaRow[];
+  const years = academicYearOptions(all.map((r) => r.academic_year ?? null));
+  const inYear = all
+    .filter((r) => normYear(r) === academicYear)
+    .filter(
+      (r) =>
+        !allowedClasses ||
+        allowedClasses.includes((r.class_name ?? "").trim())
+    );
+  const classes = Array.from(
+    new Set(inYear.map((r) => (r.class_name ?? "").trim()).filter(Boolean))
+  ).sort((a, b) => a.localeCompare(b, "id"));
+
+  const byClass = new Map<string, StudentMetaRow[]>();
+  for (const r of inYear) {
+    const key = (r.class_name ?? "").trim();
+    const list = byClass.get(key) ?? [];
+    list.push(r);
+    byClass.set(key, list);
+  }
+  const classCounts: ClassCount[] = Array.from(byClass.entries())
+    .map(([key, list]) => ({
+      name: key || null,
+      total: list.length,
+      male: list.filter((r) => r.gender === "male").length,
+      female: list.filter((r) => r.gender === "female").length,
+    }))
+    .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? "", "id"));
+
+  return {
+    years,
+    classes,
+    classCounts,
+    stats: {
+      total: inYear.length,
+      male: inYear.filter((r) => r.gender === "male").length,
+      female: inYear.filter((r) => r.gender === "female").length,
+      classCount: classes.length,
+    },
+  };
+}
+
+/** Escape pola ilike + buang kutip ganda (perusak sintaks .or()). */
+function escapeIlike(value: string): string {
+  return value
+    .replace(/\\/g, "\\\\")
+    .replace(/%/g, "\\%")
+    .replace(/_/g, "\\_")
+    .replace(/"/g, "");
+}
+
+export type StudentRowsPageResult = {
+  rows: Student[];
+  total: number;
+  page: number;
+  pageSize: number;
+};
+
+/**
+ * Baris tabel siswa per halaman dengan filter di SQL (tahun + kelas +
+ * pencarian). NULL academic_year diperlakukan sebagai tahun berjalan,
+ * selaras normYear() di getStudents.
+ *
+ * Dipakai jalur Kepsek/Admin (tanpa batas kelas). Jalur guru (daftar
+ * kecil milik sendiri) tetap memakai getStudents agar scoping kelas
+ * lewat allowedClasses tidak berubah perilakunya.
+ */
+export async function getStudentRowsPage(input: {
+  academicYear: string;
+  className: string | null;
+  search: string | null;
+  page?: number;
+  pageSize?: number;
+}): Promise<StudentRowsPageResult> {
+  const safePage =
+    Number.isFinite(input.page) && (input.page as number) > 0
+      ? Math.floor(input.page as number)
+      : 1;
+  const safeSize =
+    Number.isFinite(input.pageSize) && (input.pageSize as number) > 0
+      ? Math.min(100, Math.floor(input.pageSize as number))
+      : 20;
+
+  const { schoolId } = await requireSchoolUser();
+  const supabase = await createClient();
+  const year = (input.academicYear || "").trim() || currentAcademicYear();
+  const className = (input.className ?? "").trim();
+  const search = (input.search ?? "").trim();
+
+  // Filter diterapkan lewat builder agar dipakai identik oleh
+  // query count dan query baris (cast lokal karena tiap tahap builder
+  // punya tipe berbeda di supabase-js).
+  type Filterable = {
+    eq: (c: string, v: string) => Filterable;
+    or: (s: string) => Filterable;
+  };
+  const applyFilters = <T>(base: T): T => {
+    let q = base as unknown as Filterable;
+    if (year === currentAcademicYear()) {
+      q = q.or(`academic_year.eq."${year}",academic_year.is.null`);
+    } else {
+      q = q.eq("academic_year", year);
+    }
+    if (className) q = q.eq("class_name", className);
+    if (search) {
+      const e = escapeIlike(search);
+      q = q.or(
+        `full_name.ilike."%${e}%",student_number.ilike."%${e}%",no_induk.ilike."%${e}%"`
+      );
+    }
+    return q as unknown as T;
+  };
+
+  const countQuery = applyFilters(
+    supabase
+      .from("students")
+      .select("id", { count: "exact", head: true })
+      .eq("school_id", schoolId)
+  );
+  const { count, error: countError } = await countQuery;
+  if (countError) throw new Error(countError.message);
+
+  const from = (safePage - 1) * safeSize;
+  const rowsQuery = applyFilters(
+    supabase
+      .from("students")
+      .select("*")
+      .eq("school_id", schoolId)
+      .order("class_name", { ascending: true })
+      .order("full_name", { ascending: true })
+      .range(from, from + safeSize - 1)
+  );
+  const { data, error } = await rowsQuery;
+  if (error) throw new Error(error.message);
+
+  return {
+    rows: (data ?? []) as Student[],
+    total: count ?? 0,
+    page: safePage,
+    pageSize: safeSize,
+  };
+}
+
 export type ImportOutcome = {
   inserted: number;
   skipped: number;

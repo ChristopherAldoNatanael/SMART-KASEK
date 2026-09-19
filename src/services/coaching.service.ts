@@ -50,6 +50,9 @@ export async function getCoachingSessions(): Promise<
   const scope = await teacherScope(user.role, user.id, user.schoolId);
   if (scope.scoped && !scope.teacherId) return [];
 
+  // Daftar hanya butuh ringkasan aksi (id/status/target_date) untuk
+  // badge progres — kolom berat (deskripsi, bukti) tidak ikut ditransfer.
+  // Detail penuh tetap diambil via getCoachingSessionById.
   let query = supabase
     .from("coaching_sessions")
     .select(
@@ -58,7 +61,7 @@ export async function getCoachingSessions(): Promise<
       teacher:teachers(id, profile:profiles(full_name)),
       coach:profiles(full_name),
       supervision:supervisions(id, supervision_date),
-      actions:coaching_actions(*)
+      actions:coaching_actions(id,status,target_date)
     `
     )
     .eq("school_id", user.schoolId)
@@ -75,6 +78,78 @@ export async function getCoachingSessions(): Promise<
   }
 
   return data as CoachingSessionWithDetails[];
+}
+
+export type CoachingPageResult = {
+  rows: CoachingSessionWithDetails[];
+  /** Null bila total tak dapat dihitung (lingkungan tanpa migrasi lengkap). */
+  total: number | null;
+  page: number;
+  pageSize: number;
+};
+
+/**
+ * Daftar sesi coaching per halaman (untuk tabel /coaching).
+ * Statistik tetap lewat getCoachingStats agar angka tidak berubah.
+ */
+export async function getCoachingSessionsPage(
+  page = 1,
+  pageSize = 20
+): Promise<CoachingPageResult> {
+  const safePage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
+  const safeSize =
+    Number.isFinite(pageSize) && pageSize > 0
+      ? Math.min(100, Math.floor(pageSize))
+      : 20;
+
+  const user = await getCurrentUser();
+  if (!user?.schoolId) {
+    return { rows: [], total: 0, page: safePage, pageSize: safeSize };
+  }
+
+  const supabase = await createClient();
+  const scope = await teacherScope(user.role, user.id, user.schoolId);
+  if (scope.scoped && !scope.teacherId) {
+    return { rows: [], total: 0, page: safePage, pageSize: safeSize };
+  }
+
+  let countQuery = supabase
+    .from("coaching_sessions")
+    .select("id", { count: "exact", head: true })
+    .eq("school_id", user.schoolId);
+  if (scope.scoped && scope.teacherId) {
+    countQuery = countQuery.eq("teacher_id", scope.teacherId);
+  }
+  const { count, error: countError } = await countQuery;
+  if (countError) throw new Error(countError.message);
+
+  const from = (safePage - 1) * safeSize;
+  let rowsQuery = supabase
+    .from("coaching_sessions")
+    .select(
+      `
+      *,
+      teacher:teachers(id, profile:profiles(full_name)),
+      coach:profiles(full_name),
+      supervision:supervisions(id, supervision_date),
+      actions:coaching_actions(id,status,target_date)
+    `
+    )
+    .eq("school_id", user.schoolId)
+    .order("session_date", { ascending: false })
+    .range(from, from + safeSize - 1);
+  if (scope.scoped && scope.teacherId) {
+    rowsQuery = rowsQuery.eq("teacher_id", scope.teacherId);
+  }
+  const { data, error } = await rowsQuery;
+  if (error) throw new Error(error.message);
+
+  return {
+    rows: (data ?? []) as CoachingSessionWithDetails[],
+    total: count ?? 0,
+    page: safePage,
+    pageSize: safeSize,
+  };
 }
 
 /**

@@ -1,7 +1,10 @@
 "use server";
 
+import { revalidateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
+import { withRequestCache } from "@/lib/cache";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 
 type SchoolClass = Database["public"]["Tables"]["school_classes"]["Row"];
@@ -53,17 +56,41 @@ function sortClasses<T extends { name: string }>(rows: T[]): T[] {
   return rows.sort((a, b) => a.name.localeCompare(b.name, "id"));
 }
 
-/** Daftar kelas se-sekolah (boleh dibaca semua peran untuk dropdown). */
+async function fetchSchoolClasses(
+  db: SupabaseClient,
+  schoolId: string
+): Promise<SchoolClass[]> {
+  const { data, error } = await db
+    .from("school_classes")
+    .select("*")
+    .eq("school_id", schoolId);
+  if (error) throw new Error(error.message);
+  // Salin sebelum sort agar array hasil cache tidak dimutasi.
+  return sortClasses([...((data ?? []) as SchoolClass[])]);
+}
+
+/**
+ * Daftar kelas se-sekolah (boleh dibaca semua peran untuk dropdown).
+ * Di-cache 2 menit per user+sekolah; setiap mutasi di bawah memanggil
+ * revalidateTag sehingga tulis-baca tetap konsisten.
+ */
 export async function getSchoolClasses(): Promise<SchoolClass[]> {
   const user = await getCurrentUser();
   if (!user?.schoolId) return [];
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("school_classes")
-    .select("*")
-    .eq("school_id", user.schoolId);
-  if (error) throw new Error(error.message);
-  return sortClasses((data ?? []) as SchoolClass[]);
+  const schoolId = user.schoolId;
+  return withRequestCache(
+    ["school-classes", schoolId],
+    120,
+    [`school-classes-${schoolId}`],
+    (db) => fetchSchoolClasses(db, schoolId),
+    async () => {
+      const supabase = await createClient();
+      return fetchSchoolClasses(
+        supabase as unknown as SupabaseClient,
+        schoolId
+      );
+    }
+  );
 }
 
 /** Nama kelas aktif untuk dropdown/saran. */
@@ -131,6 +158,7 @@ export async function createSchoolClass(name: string): Promise<SchoolClass> {
     .select()
     .single();
   if (error) throw new Error(error.message);
+  revalidateTag(`school-classes-${schoolId}`);
   return data as SchoolClass;
 }
 
@@ -164,6 +192,7 @@ export async function renameSchoolClass(id: string, name: string): Promise<Schoo
     .select()
     .single();
   if (error) throw new Error(error.message);
+  revalidateTag(`school-classes-${schoolId}`);
   return data as SchoolClass;
 }
 
@@ -177,6 +206,7 @@ export async function setSchoolClassActive(id: string, active: boolean): Promise
     .eq("id", id)
     .eq("school_id", schoolId);
   if (error) throw new Error(error.message);
+  revalidateTag(`school-classes-${schoolId}`);
 }
 
 export async function deleteSchoolClass(id: string): Promise<void> {
@@ -198,4 +228,5 @@ export async function deleteSchoolClass(id: string): Promise<void> {
     .eq("id", id)
     .eq("school_id", schoolId);
   if (error) throw new Error(error.message);
+  revalidateTag(`school-classes-${schoolId}`);
 }

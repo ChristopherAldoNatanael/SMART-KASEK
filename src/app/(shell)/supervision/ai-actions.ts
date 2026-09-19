@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/auth";
 import { AIError } from "@/lib/ai";
+import { checkRateLimit } from "@/lib/rate-limit";
 import {
   generateCoachingDraft,
   getSupervisionInsight,
@@ -44,6 +45,13 @@ export async function analyzeSupervisionAction(
     return fail("Akun Anda belum terhubung ke sekolah.");
   }
 
+  const aiLimit = checkRateLimit(`ai-analyze:${user.id}`, 15, 600_000);
+  if (!aiLimit.ok) {
+    return fail(
+      `Terlalu banyak permintaan AI. Coba lagi dalam ${aiLimit.retryAfterSec} detik.`
+    );
+  }
+
   const parsed = aiSupervisionSchema.safeParse({
     supervisionId: formData.get("supervisionId"),
     refresh: formData.get("refresh"),
@@ -80,6 +88,13 @@ export async function generateCoachDraftAction(
   const user = await requireUser();
   if (!user.schoolId) {
     return fail("Akun Anda belum terhubung ke sekolah.");
+  }
+
+  const draftLimit = checkRateLimit(`ai-draft:${user.id}`, 15, 600_000);
+  if (!draftLimit.ok) {
+    return fail(
+      `Terlalu banyak permintaan AI. Coba lagi dalam ${draftLimit.retryAfterSec} detik.`
+    );
   }
 
   const parsed = aiSupervisionSchema.safeParse({

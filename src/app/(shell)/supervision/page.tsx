@@ -1,8 +1,12 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { ClipboardList, Plus } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth";
 import { hasRole } from "@/lib/permissions";
-import { getSupervisions } from "@/services/supervision.service";
+import {
+  getSupervisionStats,
+  getSupervisionsPage,
+} from "@/services/supervision.service";
 import {
   Badge,
   Empty,
@@ -28,20 +32,44 @@ const STATUS_TONES: Record<string, "neutral" | "success" | "warning" | "info"> =
   closed: "info",
 };
 
-export default async function SupervisionPage() {
-  const [allSupervisions, user] = await Promise.all([
-    getSupervisions(),
+const PAGE_SIZE = 20;
+
+export default async function SupervisionPage({
+  searchParams,
+}: {
+  searchParams?: { hal?: string };
+}) {
+  const halParam = Number.parseInt(searchParams?.hal ?? "", 10);
+  const hal =
+    Number.isFinite(halParam) && halParam > 0 ? Math.floor(halParam) : 1;
+
+  // Halaman ini khusus Supervisi Akademik (filter kind di service, dengan
+  // fallback aman bila migrasi 00022 belum dijalankan).
+  const [paged, stats, user] = await Promise.all([
+    getSupervisionsPage("akademik", hal, PAGE_SIZE),
+    getSupervisionStats("akademik"),
     getCurrentUser(),
   ]);
   const isLeader =
     user !== null && hasRole(user.role, "principal");
   const isTeacher = user?.role === "teacher";
-  // Halaman ini khusus Supervisi Akademik. Baris manajerial (kind='managerial')
-  // tampil di /supervision/manajerial. Filter di sini (bukan service) agar
-  // tetap aman bila migrasi 00022 belum dijalankan (kind undefined = akademik).
-  const supervisions = allSupervisions.filter(
-    (s) => (s as { kind?: string | null }).kind !== "managerial"
-  );
+  const supervisions = paged.rows;
+
+  const totalPages =
+    paged.total === null
+      ? null
+      : Math.max(1, Math.ceil(paged.total / paged.pageSize));
+
+  // Halaman di luar jangkauan (mis. data terhapus) → kembali ke terakhir.
+  if (
+    totalPages !== null &&
+    paged.total !== null &&
+    paged.total > 0 &&
+    supervisions.length === 0 &&
+    hal > 1
+  ) {
+    redirect(`/supervision?hal=${totalPages}`);
+  }
 
   return (
     <div className="space-y-6">
@@ -85,34 +113,13 @@ export default async function SupervisionPage() {
       </nav>
 
       <div className="flex flex-wrap items-center gap-x-8 gap-y-3 rounded-xl border bg-card px-5 py-4 text-sm shadow-[0_1px_2px_rgba(16,24,40,0.05)]">
-        {(() => {
-          // Statistik khusus akademik (selaras dengan daftar yang difilter).
-          const academic = supervisions;
-          const scores = academic
-            .map((s) => s.overall_score)
-            .filter((v): v is number => typeof v === "number");
-          const avg =
-            scores.length > 0
-              ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 100) /
-                100
-              : null;
-          return [
-            { label: "Total", value: academic.length },
-            {
-              label: "Draft",
-              value: academic.filter((s) => s.status === "draft").length,
-            },
-            {
-              label: "Selesai",
-              value: academic.filter((s) => s.status === "completed").length,
-            },
-            {
-              label: "Tindak Lanjut",
-              value: academic.filter((s) => s.status === "follow_up").length,
-            },
-            { label: "Rata-rata Nilai", value: avg ?? "—" },
-          ];
-        })().map((s) => (
+        {[
+          { label: "Total", value: stats.total },
+          { label: "Draft", value: stats.draft },
+          { label: "Selesai", value: stats.completed },
+          { label: "Tindak Lanjut", value: stats.followUp },
+          { label: "Rata-rata Nilai", value: stats.averageScore ?? "—" },
+        ].map((s) => (
           <div key={s.label} className="flex items-baseline gap-2">
             <span className="text-muted-foreground">{s.label}</span>
             <span className="tnum text-lg font-bold">{s.value}</span>
@@ -180,6 +187,43 @@ export default async function SupervisionPage() {
             ))}
           </tbody>
         </TableShell>
+      )}
+
+      {totalPages !== null && totalPages > 1 && (
+        <nav
+          aria-label="Halaman supervisi"
+          className="flex flex-wrap items-center justify-between gap-2 rounded-xl border bg-card px-5 py-3 text-sm"
+        >
+          <span className="text-muted-foreground">
+            Halaman {hal} dari {totalPages} • Total {paged.total} supervisi
+          </span>
+          <span className="flex gap-2">
+            {hal > 1 ? (
+              <Link
+                href={`/supervision?hal=${hal - 1}`}
+                className="rounded-md border px-3 py-1.5 font-medium transition-colors hover:bg-muted"
+              >
+                ← Sebelumnya
+              </Link>
+            ) : (
+              <span className="rounded-md border px-3 py-1.5 text-muted-foreground opacity-50">
+                ← Sebelumnya
+              </span>
+            )}
+            {hal < totalPages ? (
+              <Link
+                href={`/supervision?hal=${hal + 1}`}
+                className="rounded-md border px-3 py-1.5 font-medium transition-colors hover:bg-muted"
+              >
+                Berikutnya →
+              </Link>
+            ) : (
+              <span className="rounded-md border px-3 py-1.5 text-muted-foreground opacity-50">
+                Berikutnya →
+              </span>
+            )}
+          </span>
+        </nav>
       )}
     </div>
   );

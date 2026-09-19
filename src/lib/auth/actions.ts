@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { ensureProfile } from "@/services/school.service";
+import { checkRateLimit, clientIp } from "@/lib/rate-limit";
 
 export type AuthState = {
   error?: string;
@@ -20,6 +21,19 @@ export async function login(
 
   if (!email || !password) {
     return { error: "Email dan password wajib diisi" };
+  }
+
+  // Anti brute-force: dibedakan per email agar satu IP venue tidak
+  // saling memblokir.
+  const loginLimit = checkRateLimit(
+    `login:${clientIp()}:${email.toLowerCase().trim()}`,
+    10,
+    60_000
+  );
+  if (!loginLimit.ok) {
+    return {
+      error: `Terlalu banyak percobaan login. Coba lagi dalam ${loginLimit.retryAfterSec} detik.`,
+    };
   }
 
   try {
@@ -69,6 +83,14 @@ export async function signup(
 
   if (role !== "principal" && role !== "teacher") {
     return { error: "Pilih peran: Guru atau Kepala Sekolah" };
+  }
+
+  // Anti spam registrasi saat URL disebar (batas longgar per IP).
+  const signupLimit = checkRateLimit(`signup:${clientIp()}`, 30, 3_600_000);
+  if (!signupLimit.ok) {
+    return {
+      error: "Terlalu banyak pendaftaran dari jaringan ini. Coba lagi nanti.",
+    };
   }
 
   const supabase = await createClient();

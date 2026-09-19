@@ -1,7 +1,11 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { BookOpenText, Plus } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth";
-import { getLessonPlans, getLessonSubmissionStats } from "@/services/lesson.service";
+import {
+  getLessonPlansPage,
+  getLessonSubmissionStats,
+} from "@/services/lesson.service";
 import LessonDeleteButton from "@/components/learning/lesson-delete-button";
 import { Badge, Empty, PageHeader, Panel } from "@/components/common";
 
@@ -46,7 +50,17 @@ function youtubeEmbed(url: string): string | null {
   }
 }
 
-export default async function LearningPage() {
+const PAGE_SIZE = 12;
+
+export default async function LearningPage({
+  searchParams,
+}: {
+  searchParams?: { hal?: string };
+}) {
+  const halParam = Number.parseInt(searchParams?.hal ?? "", 10);
+  const hal =
+    Number.isFinite(halParam) && halParam > 0 ? Math.floor(halParam) : 1;
+
   const user = await getCurrentUser();
 
   if (!user?.schoolId) {
@@ -69,18 +83,27 @@ export default async function LearningPage() {
 
   const isPrincipal = user.role === "principal" || user.role === "admin";
 
-  let plans: Awaited<ReturnType<typeof getLessonPlans>> = [];
+  let plans: Awaited<ReturnType<typeof getLessonPlansPage>>["rows"] = [];
+  let total = 0;
   let submission = { teacherCount: 0, submittedCount: 0, percent: 0 };
   let loadError: string | null = null;
   try {
-    [plans, submission] = await Promise.all([
-      getLessonPlans(),
+    const [paged, sub] = await Promise.all([
+      getLessonPlansPage(hal, PAGE_SIZE),
       getLessonSubmissionStats(),
     ]);
+    plans = paged.rows;
+    total = paged.total;
+    submission = sub;
+    const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    if (total > 0 && plans.length === 0 && hal > 1) {
+      redirect(`/learning?hal=${totalPages}`);
+    }
   } catch (error) {
     loadError =
       error instanceof Error ? error.message : "Gagal memuat modul ajar";
   }
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
     <div className="space-y-6">
@@ -89,7 +112,7 @@ export default async function LearningPage() {
         title="Modul Ajar"
         description={
           isPrincipal
-            ? `${plans.length} modul dari guru di sekolah Anda — otomatis terintegrasi saat guru menginput.`
+            ? `${total} modul dari guru di sekolah Anda — otomatis terintegrasi saat guru menginput.`
             : "Modul yang Anda susun — otomatis terlihat oleh Kepala Sekolah."
         }
         actions={
@@ -235,6 +258,43 @@ export default async function LearningPage() {
             </Panel>
           ))}
         </div>
+      )}
+
+      {!loadError && totalPages > 1 && (
+        <nav
+          aria-label="Halaman modul ajar"
+          className="flex flex-wrap items-center justify-between gap-2 rounded-xl border bg-card px-5 py-3 text-sm"
+        >
+          <span className="text-muted-foreground">
+            Halaman {hal} dari {totalPages} • Total {total} modul
+          </span>
+          <span className="flex gap-2">
+            {hal > 1 ? (
+              <Link
+                href={`/learning?hal=${hal - 1}`}
+                className="rounded-md border px-3 py-1.5 font-medium transition-colors hover:bg-muted"
+              >
+                ← Sebelumnya
+              </Link>
+            ) : (
+              <span className="rounded-md border px-3 py-1.5 text-muted-foreground opacity-50">
+                ← Sebelumnya
+              </span>
+            )}
+            {hal < totalPages ? (
+              <Link
+                href={`/learning?hal=${hal + 1}`}
+                className="rounded-md border px-3 py-1.5 font-medium transition-colors hover:bg-muted"
+              >
+                Berikutnya →
+              </Link>
+            ) : (
+              <span className="rounded-md border px-3 py-1.5 text-muted-foreground opacity-50">
+                Berikutnya →
+              </span>
+            )}
+          </span>
+        </nav>
       )}
     </div>
   );

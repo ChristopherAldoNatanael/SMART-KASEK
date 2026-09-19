@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/auth";
 import { AIError } from "@/lib/ai";
+import { checkRateLimit } from "@/lib/rate-limit";
 import { getSchoolInsight, type SchoolInsight } from "@/services/ai.service";
 import { logAuditEvent } from "@/services/audit.service";
 import type { AIActionState } from "@/app/(shell)/supervision/ai-actions";
@@ -21,6 +22,13 @@ export async function analyzeSchoolAction(
     return fail("Akun Anda belum terhubung ke sekolah.");
   }
   const refresh = formData.get("refresh") === "true";
+
+  const aiLimit = checkRateLimit(`ai-school:${user.id}`, 15, 600_000);
+  if (!aiLimit.ok) {
+    return fail(
+      `Terlalu banyak permintaan AI. Coba lagi dalam ${aiLimit.retryAfterSec} detik.`
+    );
+  }
 
   try {
     const result = await getSchoolInsight(refresh);
