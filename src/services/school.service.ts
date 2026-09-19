@@ -66,6 +66,12 @@ export async function getOnboardingState(): Promise<OnboardingState> {
   }
 
   if (!profile) return { status: "no_profile" };
+  if (!profile.is_active) {
+    return {
+      status: "error",
+      message: "Akun Anda telah dinonaktifkan. Hubungi Kepala Sekolah atau admin untuk bantuan.",
+    };
+  }
   if (!profile.school_id) {
     return {
       status: "needs_school",
