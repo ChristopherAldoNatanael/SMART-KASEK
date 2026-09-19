@@ -1,7 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
 
-const PUBLIC_ROUTES = ["/login", "/register", "/auth/callback"];
+// /api/health is public on purpose: launch-day monitoring & warm-up.
+// It only reports presence of env vars and bucket names — never secrets.
+const PUBLIC_ROUTES = ["/login", "/register", "/auth/callback", "/api/health"];
 
 function redirectWithCookies(
   url: string,
