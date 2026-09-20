@@ -31,7 +31,8 @@ export type QrCandidate = {
 
 export type QrConfirmResult = {
   fullName: string;
-  status: "hadir" | "terlambat";
+  /** Status apa adanya dari record (hadir/terlambat/izin/sakit/alpa). */
+  status: string;
   checkedInAt: string;
   already: boolean;
 };
@@ -302,7 +303,13 @@ function serviceClient() {
   }
 }
 
+/** Token QR selalu 64 hex (randomBytes 32). Format lain ditolak sebelum DB. */
+const TOKEN_RE = /^[0-9a-f]{64}$/i;
+
 async function loadSessionByToken(token: string): Promise<Session> {
+  if (!TOKEN_RE.test(token.trim())) {
+    throw new Error("QR tidak valid. Silakan scan QR absensi yang ditampilkan guru.");
+  }
   const service = serviceClient();
   const { data, error } = await service
     .from("attendance_sessions")
@@ -400,11 +407,14 @@ export async function previewStudentForSession(input: {
     throw new Error("Data siswa tidak termasuk sesi ini. Silakan hubungi guru.");
   }
 
+  // Duplikat level TANGGAL (bukan sesi): QR baru pun tetap tahu anak ini
+  // sudah absen hari ini — sesuai UNIQUE(student_id, date) & rekap harian.
   const { data: existing } = await service
     .from("class_attendance")
     .select("status, checked_in_at")
-    .eq("session_id", session.id)
+    .eq("school_id", session.school_id)
     .eq("student_id", st.id)
+    .eq("date", session.date)
     .maybeSingle();
   const dup = existing as { status: string; checked_in_at: string | null } | null;
   if (dup) {
@@ -453,18 +463,20 @@ export async function confirmAttendanceForSession(input: {
     throw new Error("Data siswa tidak termasuk sesi ini. Silakan hubungi guru.");
   }
 
-  // Idempotent: sudah absen → kembalikan record lama, jangan duplikat.
+  // Idempotent level TANGGAL: sudah absen hari ini (sesi mana pun,
+  // termasuk manual guru) → kembalikan record lama, jangan duplikat.
   const { data: existing } = await service
     .from("class_attendance")
     .select("status, checked_in_at")
-    .eq("session_id", session.id)
+    .eq("school_id", session.school_id)
     .eq("student_id", input.studentId)
+    .eq("date", session.date)
     .maybeSingle();
   const dup = existing as { status: string; checked_in_at: string | null } | null;
   if (dup) {
     return {
       fullName: st.full_name,
-      status: dup.status === "terlambat" ? "terlambat" : "hadir",
+      status: dup.status,
       checkedInAt: dup.checked_in_at ?? now.toISOString(),
       already: true,
     };
@@ -487,19 +499,20 @@ export async function confirmAttendanceForSession(input: {
     check_in_method: "qr",
     recorded_by: null,
   });
-  // Race condition: UNIQUE(session_id, student_id) menang — baca ulang.
+  // Race condition: UNIQUE(student_id, date) menang — baca ulang record hari ini.
   if (iError) {
     const { data: retry } = await service
       .from("class_attendance")
       .select("status, checked_in_at")
-      .eq("session_id", session.id)
+      .eq("school_id", session.school_id)
       .eq("student_id", input.studentId)
+      .eq("date", session.date)
       .maybeSingle();
     const r = retry as { status: string; checked_in_at: string | null } | null;
     if (r) {
       return {
         fullName: st.full_name,
-        status: r.status === "terlambat" ? "terlambat" : "hadir",
+        status: r.status,
         checkedInAt: r.checked_in_at ?? now.toISOString(),
         already: true,
       };

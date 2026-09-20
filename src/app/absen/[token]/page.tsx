@@ -1,8 +1,14 @@
+import type { Metadata } from "next";
 import { QrCode } from "lucide-react";
 import { getPublicSessionByToken } from "@/services/attendance-session.service";
 import PublicAttendanceFlow from "./flow";
 
 export const dynamic = "force-dynamic";
+
+// Sesi absensi tidak boleh terindeks mesin pencari — hanya lewat QR guru.
+export const metadata: Metadata = {
+  robots: { index: false, follow: false },
+};
 
 export default async function PublicAttendancePage({
   params,

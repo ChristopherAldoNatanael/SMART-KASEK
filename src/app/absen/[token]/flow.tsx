@@ -7,7 +7,12 @@ import {
   previewStudentAction,
   searchStudentsAction,
 } from "./actions";
+import { ATTENDANCE_LABELS } from "@/lib/students";
 import { cn } from "@/lib/utils";
+
+function statusLabel(status: string): string {
+  return (ATTENDANCE_LABELS as Record<string, string>)[status] ?? status;
+}
 
 type Step = "identity" | "verify" | "done";
 
@@ -224,10 +229,10 @@ export default function PublicAttendanceFlow({
         <div className="space-y-4">
           {candidate.alreadyCheckedIn ? (
             <div className="rounded-xl border bg-muted/40 p-4 text-center">
-              <p className="font-bold">Kamu sudah absen pada sesi ini.</p>
+              <p className="font-bold">Kamu sudah absen hari ini.</p>
               <p className="tnum mt-1 text-sm text-muted-foreground">
                 {candidate.checkedInAt ? formatTimeID(candidate.checkedInAt) : ""} WIB
-                {candidate.checkedStatus ? ` • ${candidate.checkedStatus}` : ""}
+                {candidate.checkedStatus ? ` • ${statusLabel(candidate.checkedStatus)}` : ""}
               </p>
               <p className="mt-2 text-sm text-muted-foreground">
                 Satu anak satu absensi. Serahkan HP ke teman dan minta ia scan QR kembali.
@@ -281,7 +286,7 @@ export default function PublicAttendanceFlow({
           </p>
           <p className="font-semibold">{result.fullName}</p>
           <p className="tnum text-sm text-muted-foreground">
-            {result.status} • {formatTimeID(result.checkedInAt)} WIB
+            {statusLabel(result.status)} • {formatTimeID(result.checkedInAt)} WIB
           </p>
           <p className="rounded-lg bg-muted/50 px-3 py-2.5 text-sm text-muted-foreground">
             Serahkan HP ke teman dan minta ia <strong>scan QR kembali</strong> —
