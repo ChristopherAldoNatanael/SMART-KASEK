@@ -234,12 +234,23 @@ export async function getSessionCheckins(sessionId: string): Promise<SessionChec
     status: string;
     checked_in_at: string | null;
     created_at: string;
-    students: { full_name: string }[] | null;
-  }[]).map((r) => ({
-    fullName: r.students?.[0]?.full_name ?? "—",
-    status: r.status,
-    time: formatWibHM(r.checked_in_at ?? r.created_at),
-  }));
+    // PostgREST mengembalikan relasi many-to-one sebagai objek tunggal,
+    // tapi tipe supabase-js kadang array — tangani dua-duanya.
+    students:
+      | { full_name: string }
+      | { full_name: string }[]
+      | null;
+  }[]).map((r) => {
+    const s = r.students;
+    const fullName = (
+      Array.isArray(s) ? s[0]?.full_name : s?.full_name
+    )?.trim();
+    return {
+      fullName: fullName || "—",
+      status: r.status,
+      time: formatWibHM(r.checked_in_at ?? r.created_at),
+    };
+  });
 }
 
 /* ------------------------- Publik: tanpa login ------------------------- */
