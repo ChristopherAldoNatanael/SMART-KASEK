@@ -246,54 +246,89 @@ export async function getPublicSessionByToken(token: string): Promise<PublicSess
   };
 }
 
-function normName(v: string): string {
-  return v.trim().replace(/\s+/g, " ").toLowerCase();
+export type QrNameMatch = { studentId: string; fullName: string };
+
+/**
+ * Cari nama untuk combobox halaman publik. Hanya mengembalikan
+ * maksimal 8 nama (id + nama) — tanpa NIS/telp/data sensitif —
+ * dan hanya saat sesi terbuka. Query < 2 huruf → kosong.
+ */
+export async function searchStudentsForSession(input: {
+  token: string;
+  query: string;
+}): Promise<QrNameMatch[]> {
+  const session = await loadSessionByToken(input.token);
+  if (isExpired(session, new Date())) return [];
+  const q = input.query.trim().replace(/\s+/g, " ");
+  if (q.length < 2 || q.length > 50) return [];
+  // Netralkan wildcard LIKE agar query tidak bisa melebar.
+  const safe = q.replace(/[%_\\]/g, "");
+  if (safe.length < 2) return [];
+  const service = serviceClient();
+  const { data, error } = await service
+    .from("students")
+    .select("id, full_name")
+    .eq("school_id", session.school_id)
+    .eq("class_name", session.class_name)
+    .eq("academic_year", session.academic_year)
+    .ilike("full_name", `%${safe}%`)
+    .order("full_name", { ascending: true })
+    .limit(8);
+  if (error) return [];
+  return ((data ?? []) as { id: string; full_name: string }[]).map((r) => ({
+    studentId: r.id,
+    fullName: r.full_name,
+  }));
 }
 
-export async function lookupStudentForSession(input: {
+/**
+ * Pratinjau kandidat dari pilihan daftar (tanpa NIS).
+ * Server memvalidasi ulang: studentId harus anggota kelas sesi ini.
+ * Verifikasi singkat diganti konfirmasi eksplisit "Ya, ini saya" di UI
+ * + pengawasan guru lewat rekap live (titip absen langsung terlihat).
+ */
+export async function previewStudentForSession(input: {
   token: string;
-  fullName: string;
-  studentCode: string;
+  studentId: string;
 }): Promise<QrCandidate> {
   const session = await loadSessionByToken(input.token);
   const now = new Date();
   if (isExpired(session, now)) {
     throw new Error("Sesi absensi sudah ditutup atau kedaluwarsa. Silakan hubungi guru jika ada kesalahan.");
   }
-  const name = normName(input.fullName);
-  const code = input.studentCode.trim();
-  if (name.length < 2 || code.length < 2) throw new Error("Periksa kembali identitas Anda.");
 
   const service = serviceClient();
-  // Ambil roster kelas (kolom minimal), cocokkan di server.
-  const { data: roster, error } = await service
+  const { data: student, error } = await service
     .from("students")
-    .select("id, full_name, student_number, no_induk, class_name")
+    .select("id, full_name, class_name, academic_year")
+    .eq("id", input.studentId)
     .eq("school_id", session.school_id)
-    .eq("class_name", session.class_name)
-    .eq("academic_year", session.academic_year);
-  if (error) throw new Error("Absensi belum berhasil diproses. Silakan coba lagi.");
-  const matches = (roster ?? []).filter(
-    (s: { full_name: string; student_number: string | null; no_induk: string | null }) =>
-      normName(s.full_name) === name &&
-      (s.student_number === code || s.no_induk === code)
-  );
-  if (matches.length !== 1) {
-    throw new Error("Data siswa tidak ditemukan. Periksa kembali nama dan NIS/nomor induk Anda.");
+    .single();
+  const st = student as {
+    id: string;
+    full_name: string;
+    class_name: string | null;
+    academic_year: string | null;
+  } | null;
+  if (error || !st) throw new Error("Data siswa tidak ditemukan. Silakan pilih ulang nama Anda.");
+  if (
+    (st.class_name ?? "").trim() !== session.class_name ||
+    (st.academic_year ?? "").trim() !== session.academic_year
+  ) {
+    throw new Error("Data siswa tidak termasuk sesi ini. Silakan hubungi guru.");
   }
-  const student = matches[0] as { id: string; full_name: string; class_name: string | null };
 
   const { data: existing } = await service
     .from("class_attendance")
     .select("status, checked_in_at")
     .eq("session_id", session.id)
-    .eq("student_id", student.id)
+    .eq("student_id", st.id)
     .maybeSingle();
   const dup = existing as { status: string; checked_in_at: string | null } | null;
   if (dup) {
     return {
-      studentId: student.id,
-      fullName: student.full_name,
+      studentId: st.id,
+      fullName: st.full_name,
       className: session.class_name,
       alreadyCheckedIn: true,
       checkedInAt: dup.checked_in_at,
@@ -301,8 +336,8 @@ export async function lookupStudentForSession(input: {
     };
   }
   return {
-    studentId: student.id,
-    fullName: student.full_name,
+    studentId: st.id,
+    fullName: st.full_name,
     className: session.class_name,
     alreadyCheckedIn: false,
     checkedInAt: null,
@@ -313,7 +348,6 @@ export async function lookupStudentForSession(input: {
 export async function confirmAttendanceForSession(input: {
   token: string;
   studentId: string;
-  studentCode: string;
 }): Promise<QrConfirmResult> {
   const session = await loadSessionByToken(input.token);
   // Server time = satu-satunya sumber waktu.
@@ -324,14 +358,17 @@ export async function confirmAttendanceForSession(input: {
   const service = serviceClient();
   const { data: student, error: sError } = await service
     .from("students")
-    .select("id, full_name, student_number, no_induk")
+    .select("id, full_name, class_name, academic_year")
     .eq("id", input.studentId)
     .eq("school_id", session.school_id)
     .single();
-  if (sError || !student) throw new Error("Data siswa tidak ditemukan. Periksa kembali identitas Anda.");
-  const st = student as { full_name: string; student_number: string | null; no_induk: string | null };
-  if (st.student_number !== input.studentCode.trim() && st.no_induk !== input.studentCode.trim()) {
-    throw new Error("Verifikasi gagal. Periksa kembali identitas Anda.");
+  if (sError || !student) throw new Error("Data siswa tidak ditemukan. Silakan pilih ulang nama Anda.");
+  const st = student as { full_name: string; class_name: string | null; academic_year: string | null };
+  if (
+    (st.class_name ?? "").trim() !== session.class_name ||
+    (st.academic_year ?? "").trim() !== session.academic_year
+  ) {
+    throw new Error("Data siswa tidak termasuk sesi ini. Silakan hubungi guru.");
   }
 
   // Idempotent: sudah absen → kembalikan record lama, jangan duplikat.

@@ -50,16 +50,12 @@ export type CreateAttendanceSessionInput = z.infer<
   typeof createAttendanceSessionSchema
 >;
 
-/** Identitas ringan siswa di halaman publik: nama + NIS/nomor induk. */
-export const qrIdentitySchema = z.object({
-  token: z.string().trim().min(16).max(128),
-  fullName: z.string().trim().min(2, "Nama minimal 2 huruf").max(100),
-  studentCode: z.string().trim().min(2, "NIS/nomor induk minimal 2 karakter").max(50),
-});
-
-export type QrIdentityInput = z.infer<typeof qrIdentitySchema>;
-
-export const qrConfirmSchema = z.object({
+/**
+ * Identitas siswa = pilihan dari daftar (tanpa ketik NIS).
+ * Pilihan klien tidak dipercaya — server memvalidasi ulang
+ * bahwa studentId memang anggota kelas sesi ini.
+ */
+const qrStudentRefSchema = z.object({
   token: z.string().trim().min(16).max(128),
   studentId: z
     .string()
@@ -67,9 +63,12 @@ export const qrConfirmSchema = z.object({
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
       "Data siswa tidak valid"
     ),
-  studentCode: z.string().trim().min(2).max(50),
 });
 
+export const qrPreviewSchema = qrStudentRefSchema;
+export type QrPreviewInput = z.infer<typeof qrPreviewSchema>;
+
+export const qrConfirmSchema = qrStudentRefSchema;
 export type QrConfirmInput = z.infer<typeof qrConfirmSchema>;
 
 export function firstSessionIssueMessage(error: z.ZodError): string {

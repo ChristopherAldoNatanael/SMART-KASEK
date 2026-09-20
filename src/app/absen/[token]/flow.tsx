@@ -1,8 +1,13 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { BadgeCheck, Loader2, QrCode } from "lucide-react";
-import { confirmAttendanceAction, lookupStudentAction } from "./actions";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { BadgeCheck, CircleCheck, Loader2, QrCode } from "lucide-react";
+import {
+  confirmAttendanceAction,
+  previewStudentAction,
+  searchStudentsAction,
+} from "./actions";
+import { cn } from "@/lib/utils";
 
 type Step = "identity" | "verify" | "done";
 
@@ -21,9 +26,10 @@ function formatDateID(iso: string): string {
 }
 
 /**
- * Flow publik siswa: IDENTITAS → VERIFIKASI → KONFIRMASI → SELESAI.
- * Tanpa login. Setelah selesai state identitas dibuang — siswa
- * berikutnya WAJIB scan QR kembali (tidak ada tombol "absen siswa lain").
+ * Flow publik siswa: PILIH NAMA → "YA, INI SAYA" → KONFIRMASI → SELESAI.
+ * Tanpa login, tanpa ketik NIS. Verifikasi singkat = pengakuan eksplisit
+ * + pengawasan guru lewat rekap live (titip absen langsung terlihat).
+ * Setelah selesai state dibuang — siswa berikutnya WAJIB scan QR kembali.
  */
 export default function PublicAttendanceFlow({
   token,
@@ -46,21 +52,47 @@ export default function PublicAttendanceFlow({
     checkedInAt: string | null;
     checkedStatus: string | null;
   } | null>(null);
+  const [acknowledged, setAcknowledged] = useState(false);
   const [result, setResult] = useState<{
     fullName: string;
     status: string;
     checkedInAt: string;
     already: boolean;
   } | null>(null);
-  const [code, setCode] = useState("");
+  // Combobox nama: ketik 2 huruf → ketuk nama dari daftar.
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<{ studentId: string; fullName: string }[]>([]);
+  const [listOpen, setListOpen] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const reqId = useRef(0);
 
-  function lookup(formData: FormData) {
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < 2) {
+      setResults([]);
+      setListOpen(false);
+      setSearching(false);
+      return;
+    }
+    setSearching(true);
+    const id = ++reqId.current;
+    const t = setTimeout(async () => {
+      const res = await searchStudentsAction({ token, query: q });
+      if (reqId.current !== id) return;
+      setSearching(false);
+      setResults(res.results);
+      setListOpen(true);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [query, token]);
+
+  function pickAndPreview(m: { studentId: string; fullName: string }) {
+    setQuery(m.fullName);
+    setListOpen(false);
     setError(null);
-    const fullName = String(formData.get("fullName") ?? "");
-    const studentCode = String(formData.get("studentCode") ?? "");
-    setCode(studentCode);
+    setAcknowledged(false);
     startTransition(async () => {
-      const res = await lookupStudentAction({ token, fullName, studentCode });
+      const res = await previewStudentAction({ token, studentId: m.studentId });
       if (!res.ok) {
         setError(res.error);
         return;
@@ -77,13 +109,12 @@ export default function PublicAttendanceFlow({
   }
 
   function confirm() {
-    if (!candidate) return;
+    if (!candidate || !acknowledged) return;
     setError(null);
     startTransition(async () => {
       const res = await confirmAttendanceAction({
         token,
         studentId: candidate.studentId,
-        studentCode: code,
       });
       if (!res.ok) {
         setError(res.error);
@@ -97,7 +128,9 @@ export default function PublicAttendanceFlow({
       });
       // Buang identitas — HP yang sama tidak bisa lanjut ke nama lain.
       setCandidate(null);
-      setCode("");
+      setAcknowledged(false);
+      setQuery("");
+      setResults([]);
       setStep("done");
     });
   }
@@ -122,83 +155,119 @@ export default function PublicAttendanceFlow({
       )}
 
       {step === "identity" && (
-        <form
-          action={lookup}
-          className="space-y-3"
-        >
-          <p className="text-sm text-muted-foreground">Silakan identifikasi diri Anda.</p>
-          <label className="grid gap-1 text-sm font-medium">
-            Nama lengkap
+        <div className="space-y-3">
+          <p className="text-center text-[15px]">
+            Ketik <strong>2 huruf</strong> namamu,
+            <br />
+            lalu <strong>ketuk namamu</strong> di daftar.
+          </p>
+          <div className="relative">
+            <label htmlFor="qr-fullname" className="sr-only">
+              Cari nama
+            </label>
             <input
-              name="fullName"
-              required
-              minLength={2}
-              maxLength={100}
+              id="qr-fullname"
               autoComplete="off"
-              placeholder="Cari nama... tulis persis seperti di kelas"
-              className="min-h-[52px] rounded-lg border bg-background px-3 text-base"
+              role="combobox"
+              aria-expanded={listOpen}
+              aria-controls="qr-namelist"
+              aria-autocomplete="list"
+              placeholder="cth. ketik “al”…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onBlur={() => setTimeout(() => setListOpen(false), 150)}
+              onFocus={() => {
+                if (results.length > 0) setListOpen(true);
+              }}
+              className="min-h-[56px] w-full rounded-xl border-2 bg-background px-4 text-lg"
             />
-          </label>
-          <label className="grid gap-1 text-sm font-medium">
-            NIS / nomor induk
-            <input
-              name="studentCode"
-              required
-              minLength={2}
-              maxLength={50}
-              autoComplete="off"
-              inputMode="numeric"
-              placeholder="Sesuai nomor induk sekolah"
-              className="min-h-[52px] rounded-lg border bg-background px-3 text-base"
-            />
-            <span className="text-xs font-normal text-muted-foreground">
-              Verifikasi singkat agar tidak asal memilih nama.
-            </span>
-          </label>
-          <button
-            type="submit"
-            disabled={pending}
-            className="inline-flex min-h-[52px] w-full items-center justify-center gap-2 rounded-lg bg-primary px-5 text-base font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
-          >
-            {pending && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
-            {pending ? "Memeriksa..." : "Lanjutkan"}
-          </button>
-        </form>
+            {listOpen && (
+              <ul
+                id="qr-namelist"
+                role="listbox"
+                aria-label="Hasil pencarian nama"
+                className="absolute inset-x-0 top-full z-10 mt-1 max-h-64 overflow-auto rounded-xl border-2 bg-card shadow-lg"
+              >
+                {searching && (
+                  <li className="flex items-center gap-2 px-4 py-3.5 text-[15px] text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                    Mencari...
+                  </li>
+                )}
+                {!searching &&
+                  results.map((m) => (
+                    <li key={m.studentId} role="option" aria-selected="false">
+                      <button
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => pickAndPreview(m)}
+                        disabled={pending}
+                        className="flex min-h-[56px] w-full items-center px-4 text-left text-[17px] font-semibold transition-colors hover:bg-muted disabled:opacity-60"
+                      >
+                        {pending && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />}
+                        {m.fullName}
+                      </button>
+                    </li>
+                  ))}
+                {!searching && results.length === 0 && query.trim().length >= 2 && (
+                  <li className="px-4 py-3.5 text-[15px] text-muted-foreground">
+                    Tidak ketemu — periksa ejaan atau hubungi guru.
+                  </li>
+                )}
+              </ul>
+            )}
+          </div>
+        </div>
       )}
 
       {step === "verify" && candidate && (
         <div className="space-y-4">
           {candidate.alreadyCheckedIn ? (
             <div className="rounded-xl border bg-muted/40 p-4 text-center">
-              <p className="font-bold">Anda sudah melakukan absensi.</p>
+              <p className="font-bold">Kamu sudah absen.</p>
               <p className="tnum mt-1 text-sm text-muted-foreground">
                 {candidate.checkedInAt ? formatTimeID(candidate.checkedInAt) : ""} WIB
                 {candidate.checkedStatus ? ` • ${candidate.checkedStatus}` : ""}
               </p>
               <p className="mt-2 text-sm text-muted-foreground">
-                Satu siswa satu absensi per sesi. Serahkan HP ke teman dan minta ia scan QR kembali.
+                Satu anak satu absensi. Serahkan HP ke teman dan minta ia scan QR kembali.
               </p>
             </div>
           ) : (
             <>
-              <div className="rounded-xl border p-4 text-sm">
-                <p className="font-bold">Konfirmasi Absensi</p>
-                <dl className="mt-2 space-y-1">
-                  <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Nama</dt><dd className="font-semibold">{candidate.fullName}</dd></div>
-                  <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Kelas</dt><dd className="font-semibold">{className}</dd></div>
-                  <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Tanggal</dt><dd className="font-semibold">{formatDateID(date)}</dd></div>
-                  <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Waktu</dt><dd className="tnum font-semibold">otomatis dari server</dd></div>
-                </dl>
+              <div className="rounded-xl border-2 p-5 text-center">
+                <p className="text-sm text-muted-foreground">Kamu akan absen sebagai</p>
+                <p className="mt-1 text-2xl font-bold leading-snug">{candidate.fullName}</p>
+                <p className="tnum mt-1 text-sm text-muted-foreground">
+                  Kelas {className} • {formatDateID(date)}
+                </p>
               </div>
               <button
                 type="button"
-                onClick={confirm}
-                disabled={pending}
-                className="inline-flex min-h-[52px] w-full items-center justify-center gap-2 rounded-lg bg-primary px-5 text-base font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
+                aria-pressed={acknowledged}
+                onClick={() => setAcknowledged((v) => !v)}
+                className={cn(
+                  "flex min-h-[56px] w-full items-center justify-center gap-2 rounded-xl border-2 text-[17px] font-bold transition-colors",
+                  acknowledged
+                    ? "border-emerald-600 bg-emerald-600 text-white"
+                    : "border-border bg-background hover:border-emerald-600/60 hover:bg-emerald-50"
+                )}
               >
-                {pending && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
-                {pending ? "Menyimpan..." : "Konfirmasi absensi"}
+                <CircleCheck className="h-5 w-5" aria-hidden />
+                {acknowledged ? "Ya, ini saya!" : "Ketuk: Ya, ini saya"}
               </button>
+              <button
+                type="button"
+                onClick={confirm}
+                disabled={pending || !acknowledged}
+                className="inline-flex min-h-[56px] w-full items-center justify-center gap-2 rounded-xl bg-primary px-5 text-lg font-bold text-primary-foreground transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-40"
+              >
+                {pending && <Loader2 className="h-5 w-5 animate-spin" aria-hidden />}
+                {pending ? "Menyimpan..." : "Absen sekarang"}
+              </button>
+              <p className="text-center text-xs text-muted-foreground">
+                Isi dengan jujur ya — absen untuk teman terlihat di rekap guru.
+              </p>
             </>
           )}
         </div>
@@ -215,8 +284,8 @@ export default function PublicAttendanceFlow({
             {result.status} • {formatTimeID(result.checkedInAt)} WIB
           </p>
           <p className="rounded-lg bg-muted/50 px-3 py-2.5 text-sm text-muted-foreground">
-            Absensi Anda sudah tercatat. Serahkan HP ke teman dan minta ia <strong>scan QR kembali</strong> —
-            halaman ini tidak bisa dipakai untuk siswa lain.
+            Serahkan HP ke teman dan minta ia <strong>scan QR kembali</strong> —
+            halaman ini tidak bisa dipakai anak lain.
           </p>
         </div>
       )}
