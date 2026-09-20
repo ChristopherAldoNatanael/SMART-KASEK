@@ -6,6 +6,7 @@ import { allowedClassesFor, currentAcademicYear, todayISO } from "@/lib/students
 import { Empty, PageHeader, Panel } from "@/components/common";
 import AttendanceDateNav from "@/components/students/attendance-date-nav";
 import AttendanceForm from "@/components/students/attendance-form";
+import AttendanceSessionPanel from "@/components/students/attendance-session-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -99,7 +100,7 @@ export default async function AttendancePage({
       <PageHeader
         eyebrow={`Kesiswaan • Absensi • ${dateLabel}`}
         title={`Kelas ${className}`}
-        description={`Tahun ajaran ${academicYear}. Ketuk H / I / S / A untuk tiap anak, lalu tekan Simpan absensi. Menyimpan ulang tanggal yang sama berarti mengoreksi.`}
+        description={`Tahun ajaran ${academicYear}. Ketuk H / T / I / S / A untuk tiap anak, lalu tekan Simpan absensi. Yang belum diketuk = Belum Absen (bukan Hadir). Menyimpan ulang tanggal yang sama berarti mengoreksi.`}
         actions={
           <Link
             href={`/students/absensi/rekap?bulan=${date.slice(0, 7)}&kelas=${encodeURIComponent(className)}`}
@@ -116,6 +117,12 @@ export default async function AttendancePage({
         current={date}
       />
 
+      <AttendanceSessionPanel
+        academicYear={academicYear}
+        className={className}
+        date={date}
+      />
+
       {sheet.rows.length === 0 ? (
         <Empty
           icon={ClipboardCheck}
@@ -130,7 +137,7 @@ export default async function AttendancePage({
           description={
             sheet.filled > 0
               ? `Sudah terisi ${sheet.filled} dari ${sheet.rows.length}.`
-              : "Belum ada yang diisi hari ini — bawaan semua Hadir, tinggal ubah yang tidak hadir."
+              : "Belum ada yang diisi hari ini — tandai satu per satu, atau pakai Semua hadir lalu koreksi."
           }
         >
           <AttendanceForm

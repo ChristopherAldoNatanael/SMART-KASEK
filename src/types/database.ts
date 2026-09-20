@@ -916,6 +916,53 @@ export interface Database {
           created_at?: string;
         };
       };
+      attendance_sessions: {
+        Row: {
+          id: string;
+          school_id: string;
+          class_name: string;
+          academic_year: string;
+          date: string;
+          label: string;
+          starts_at: string;
+          late_after: string | null;
+          ends_at: string | null;
+          status: string;
+          qr_token: string;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          school_id: string;
+          class_name: string;
+          academic_year: string;
+          date: string;
+          label?: string;
+          starts_at?: string;
+          late_after?: string | null;
+          ends_at?: string | null;
+          status?: string;
+          qr_token: string;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          school_id?: string;
+          class_name?: string;
+          academic_year?: string;
+          date?: string;
+          label?: string;
+          starts_at?: string;
+          late_after?: string | null;
+          ends_at?: string | null;
+          status?: string;
+          qr_token?: string;
+          created_by?: string | null;
+          created_at?: string;
+        };
+      };
       class_attendance: {
         Row: {
           id: string;
@@ -927,6 +974,9 @@ export interface Database {
           status: string;
           recorded_by: string | null;
           created_at: string;
+          session_id: string | null;
+          checked_in_at: string | null;
+          check_in_method: string;
         };
         Insert: {
           id?: string;
@@ -938,6 +988,9 @@ export interface Database {
           status?: string;
           recorded_by?: string | null;
           created_at?: string;
+          session_id?: string | null;
+          checked_in_at?: string | null;
+          check_in_method?: string;
         };
         Update: {
           id?: string;
@@ -949,6 +1002,9 @@ export interface Database {
           status?: string;
           recorded_by?: string | null;
           created_at?: string;
+          session_id?: string | null;
+          checked_in_at?: string | null;
+          check_in_method?: string;
         };
       };
       school_classes: {

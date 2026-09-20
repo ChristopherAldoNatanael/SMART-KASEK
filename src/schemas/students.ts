@@ -97,7 +97,7 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 const attendanceItemSchema = z.object({
   studentId: z.string().regex(UUID_RE, "Data siswa tidak valid"),
-  status: z.enum(["hadir", "izin", "sakit", "alpa"]),
+  status: z.enum(["hadir", "terlambat", "izin", "sakit", "alpa"]),
 });
 
 /** Absensi satu kelas satu tanggal dikirim sebagai JSON (maksimal 500). */

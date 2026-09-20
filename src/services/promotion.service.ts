@@ -17,6 +17,8 @@ type Attendance = Database["public"]["Tables"]["class_attendance"]["Row"];
 
 export type AttendanceTotals = {
   hadir: number;
+  /** Terlambat dihitung sebagai kehadiran (hadir + terlambat). */
+  terlambat: number;
   izin: number;
   sakit: number;
   alpa: number;
@@ -125,8 +127,15 @@ async function attendanceByStudent(
     .lte("date", range.to);
   if (error) throw new Error(error.message);
   for (const r of (data ?? []) as Pick<Attendance, "student_id" | "status">[]) {
-    const t = map.get(r.student_id) ?? { hadir: 0, izin: 0, sakit: 0, alpa: 0 };
+    const t = map.get(r.student_id) ?? {
+      hadir: 0,
+      terlambat: 0,
+      izin: 0,
+      sakit: 0,
+      alpa: 0,
+    };
     if (r.status === "hadir") t.hadir++;
+    else if (r.status === "terlambat") t.terlambat++;
     else if (r.status === "izin") t.izin++;
     else if (r.status === "sakit") t.sakit++;
     else if (r.status === "alpa") t.alpa++;
@@ -179,7 +188,13 @@ export async function getPromotionBoard(academicYear: string): Promise<{
     student_number: s.student_number,
     status: s.status,
     decision: byStudent.get(s.id) ?? null,
-    attendance: attendance.get(s.id) ?? { hadir: 0, izin: 0, sakit: 0, alpa: 0 },
+    attendance: attendance.get(s.id) ?? {
+      hadir: 0,
+      terlambat: 0,
+      izin: 0,
+      sakit: 0,
+      alpa: 0,
+    },
   }));
 
   return {
@@ -374,7 +389,13 @@ export async function getPromotionDetail(
       .eq("homeroom_class", studentClass)
       .maybeSingle(),
   ]);
-  const a = attendanceMap.get(studentId) ?? { hadir: 0, izin: 0, sakit: 0, alpa: 0 };
+  const a = attendanceMap.get(studentId) ?? {
+    hadir: 0,
+    terlambat: 0,
+    izin: 0,
+    sakit: 0,
+    alpa: 0,
+  };
   const subjects = Array.from(
     new Set(
       ((assigns.data ?? []) as { subject: string }[]).map((r) => r.subject.trim()).filter(Boolean)
@@ -387,7 +408,10 @@ export async function getPromotionDetail(
   return {
     student,
     decision,
-    attendance: { ...a, total: a.hadir + a.izin + a.sakit + a.alpa },
+    attendance: {
+      ...a,
+      total: a.hadir + a.terlambat + a.izin + a.sakit + a.alpa,
+    },
     subjects,
     homeroomName,
     canRecommend,

@@ -44,10 +44,16 @@ export const STUDENT_STATUS_LABELS: Record<StudentStatusValue, string> = {
 
 /* ------------------------------- Absensi -------------------------------- */
 
-export type AttendanceStatus = "hadir" | "izin" | "sakit" | "alpa";
+export type AttendanceStatus =
+  | "hadir"
+  | "terlambat"
+  | "izin"
+  | "sakit"
+  | "alpa";
 
 export const ATTENDANCE_STATUSES: AttendanceStatus[] = [
   "hadir",
+  "terlambat",
   "izin",
   "sakit",
   "alpa",
@@ -55,6 +61,7 @@ export const ATTENDANCE_STATUSES: AttendanceStatus[] = [
 
 export const ATTENDANCE_LABELS: Record<AttendanceStatus, string> = {
   hadir: "Hadir",
+  terlambat: "Terlambat",
   izin: "Izin",
   sakit: "Sakit",
   alpa: "Alpa",
@@ -62,10 +69,14 @@ export const ATTENDANCE_LABELS: Record<AttendanceStatus, string> = {
 
 export const ATTENDANCE_SHORT: Record<AttendanceStatus, string> = {
   hadir: "H",
+  terlambat: "T",
   izin: "I",
   sakit: "S",
   alpa: "A",
 };
+
+/** Status yang dihitung sebagai kehadiran (untuk persen rekap). */
+export const PRESENT_STATUSES: AttendanceStatus[] = ["hadir", "terlambat"];
 
 /** Tanggal hari ini format YYYY-MM-DD (default pilihan tanggal absensi). */
 export function todayISO(now: Date = new Date()): string {

@@ -123,6 +123,7 @@ export async function saveAttendance(input: {
 
   const counts: Record<AttendanceStatus, number> = {
     hadir: 0,
+    terlambat: 0,
     izin: 0,
     sakit: 0,
     alpa: 0,
@@ -130,7 +131,8 @@ export async function saveAttendance(input: {
   const batch: Database["public"]["Tables"]["class_attendance"]["Insert"][] = [];
   for (const item of input.items) {
     if (!ownedIds.has(item.studentId)) continue;
-    if (!["hadir", "izin", "sakit", "alpa"].includes(item.status)) continue;
+    if (!["hadir", "terlambat", "izin", "sakit", "alpa"].includes(item.status))
+      continue;
     batch.push({
       school_id: schoolId,
       student_id: item.studentId,
@@ -159,11 +161,12 @@ export type MonthlyStudentRecap = {
   full_name: string;
   student_number: string | null;
   hadir: number;
+  terlambat: number;
   izin: number;
   sakit: number;
   alpa: number;
   total: number;
-  /** Persen kehadiran (hadir/total), bilangan bulat. */
+  /** Persen kehadiran ((hadir+terlambat)/total), bilangan bulat. */
   percent: number;
 };
 
@@ -171,6 +174,7 @@ export type MonthlyClassRecap = {
   className: string;
   days: number;
   hadir: number;
+  terlambat: number;
   izin: number;
   sakit: number;
   alpa: number;
@@ -203,7 +207,7 @@ export async function getMonthlyRecap(input: {
   schoolYear: string;
   allClasses: string[];
   classes: MonthlyClassRecap[];
-  totals: { days: number; hadir: number; izin: number; sakit: number; alpa: number; total: number; percent: number };
+  totals: { days: number; hadir: number; terlambat: number; izin: number; sakit: number; alpa: number; total: number; percent: number };
 }> {
   const { schoolId } = await requireAttendanceAccess();
   const cleanMonth = /^\d{4}-\d{2}$/.test(input.month.trim())
@@ -278,27 +282,31 @@ export async function getMonthlyRecap(input: {
     const rows: MonthlyStudentRecap[] = members.map((s) => {
       const list = byStudent.get(s.id) ?? [];
       const hadir = list.filter((r) => r.status === "hadir").length;
+      const terlambat = list.filter((r) => r.status === "terlambat").length;
       const izin = list.filter((r) => r.status === "izin").length;
       const sakit = list.filter((r) => r.status === "sakit").length;
       const alpa = list.filter((r) => r.status === "alpa").length;
-      const total = hadir + izin + sakit + alpa;
+      const total = hadir + terlambat + izin + sakit + alpa;
       return {
         id: s.id,
         full_name: s.full_name,
         student_number: s.student_number,
         hadir,
+        terlambat,
         izin,
         sakit,
         alpa,
         total,
-        percent: total > 0 ? Math.round((hadir / total) * 100) : 100,
+        percent:
+          total > 0 ? Math.round(((hadir + terlambat) / total) * 100) : 100,
       };
     });
     const hadir = rows.reduce((a, r) => a + r.hadir, 0);
+    const terlambat = rows.reduce((a, r) => a + r.terlambat, 0);
     const izin = rows.reduce((a, r) => a + r.izin, 0);
     const sakit = rows.reduce((a, r) => a + r.sakit, 0);
     const alpa = rows.reduce((a, r) => a + r.alpa, 0);
-    const total = hadir + izin + sakit + alpa;
+    const total = hadir + terlambat + izin + sakit + alpa;
     const attention = rows
       .map((r) => ({ name: r.full_name, reason: attentionReason(r) }))
       .filter((a): a is { name: string; reason: string } => a.reason !== null);
@@ -306,11 +314,13 @@ export async function getMonthlyRecap(input: {
       className: cls,
       days,
       hadir,
+      terlambat,
       izin,
       sakit,
       alpa,
       total,
-      percent: total > 0 ? Math.round((hadir / total) * 100) : 100,
+      percent:
+        total > 0 ? Math.round(((hadir + terlambat) / total) * 100) : 100,
       rows,
       attention,
     });
@@ -320,15 +330,19 @@ export async function getMonthlyRecap(input: {
   const totals = {
     days: new Set(inScope.map((r) => r.date)).size,
     hadir: classes.reduce((a, c) => a + c.hadir, 0),
+    terlambat: classes.reduce((a, c) => a + c.terlambat, 0),
     izin: classes.reduce((a, c) => a + c.izin, 0),
     sakit: classes.reduce((a, c) => a + c.sakit, 0),
     alpa: classes.reduce((a, c) => a + c.alpa, 0),
     total: 0,
     percent: 100,
   };
-  totals.total = totals.hadir + totals.izin + totals.sakit + totals.alpa;
+  totals.total =
+    totals.hadir + totals.terlambat + totals.izin + totals.sakit + totals.alpa;
   totals.percent =
-    totals.total > 0 ? Math.round((totals.hadir / totals.total) * 100) : 100;
+    totals.total > 0
+      ? Math.round(((totals.hadir + totals.terlambat) / totals.total) * 100)
+      : 100;
 
   const allClasses = Array.from(
     new Set(roster.map((s) => (s.class_name ?? "").trim()).filter(Boolean))

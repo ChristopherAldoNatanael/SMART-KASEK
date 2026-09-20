@@ -170,6 +170,7 @@ export default async function AttendanceRecapPage({
         {[
           { label: "Kehadiran", value: `${view.mode === "class" ? (single?.percent ?? 100) : recap.totals.percent}%` },
           { label: "Hadir", value: view.mode === "class" ? (single?.hadir ?? 0) : recap.totals.hadir },
+          { label: "Terlambat", value: view.mode === "class" ? (single?.terlambat ?? 0) : recap.totals.terlambat },
           { label: "Izin", value: view.mode === "class" ? (single?.izin ?? 0) : recap.totals.izin },
           { label: "Sakit", value: view.mode === "class" ? (single?.sakit ?? 0) : recap.totals.sakit },
           { label: "Alpa", value: view.mode === "class" ? (single?.alpa ?? 0) : recap.totals.alpa },
@@ -205,11 +206,12 @@ export default async function AttendanceRecapPage({
 
             <Panel title={`Kelas ${single.className} — ${single.rows.length} siswa`}>
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[560px] text-left text-[15px]">
+                <table className="w-full min-w-[620px] text-left text-[15px]">
                   <thead>
                     <tr className="border-b text-sm text-muted-foreground">
                       <th className="px-3 py-2.5 font-semibold">Nama</th>
                       <th className="px-3 py-2.5 text-center font-semibold">H</th>
+                      <th className="px-3 py-2.5 text-center font-semibold">T</th>
                       <th className="px-3 py-2.5 text-center font-semibold">I</th>
                       <th className="px-3 py-2.5 text-center font-semibold">S</th>
                       <th className="px-3 py-2.5 text-center font-semibold">A</th>
@@ -231,6 +233,7 @@ export default async function AttendanceRecapPage({
                           )}
                         </td>
                         <td className="tnum px-3 py-2.5 text-center">{r.hadir}</td>
+                        <td className="tnum px-3 py-2.5 text-center">{r.terlambat}</td>
                         <td className="tnum px-3 py-2.5 text-center">{r.izin}</td>
                         <td className="tnum px-3 py-2.5 text-center">{r.sakit}</td>
                         <td className="tnum px-3 py-2.5 text-center">{r.alpa}</td>
@@ -278,7 +281,7 @@ export default async function AttendanceRecapPage({
                 </Badge>
               </span>
               <span className="tnum mt-1 block text-sm text-muted-foreground">
-                {c.days} hari • H {c.hadir} • I {c.izin} • S {c.sakit} • A {c.alpa}
+                {c.days} hari • H {c.hadir} • T {c.terlambat} • I {c.izin} • S {c.sakit} • A {c.alpa}
               </span>
               {c.attention.length > 0 && (
                 <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-800">

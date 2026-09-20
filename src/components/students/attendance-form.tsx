@@ -25,6 +25,10 @@ const STATUS_STYLES: Record<AttendanceStatus, { on: string; off: string }> = {
     on: "border-emerald-600 bg-emerald-600 text-white shadow-sm",
     off: "border-border bg-background hover:border-emerald-600/60 hover:bg-emerald-50",
   },
+  terlambat: {
+    on: "border-orange-500 bg-orange-500 text-white shadow-sm",
+    off: "border-border bg-background hover:border-orange-500/60 hover:bg-orange-50",
+  },
   izin: {
     on: "border-sky-600 bg-sky-600 text-white shadow-sm",
     off: "border-border bg-background hover:border-sky-600/60 hover:bg-sky-50",
@@ -53,9 +57,10 @@ function SaveButton({ disabled }: { disabled: boolean }) {
 }
 
 /**
- * Form absensi: ketuk H/I/S/A per anak (besar, ramah jempol).
- * Yang belum ditandai dianggap Hadir agar guru tinggal mengubah
- * yang tidak hadir. Tombol "Semua hadir" untuk mengulang dari awal.
+ * Form absensi: ketuk H/T/I/S/A per anak (besar, ramah jempol).
+ * Yang belum ditandai = Belum Absen (null, tidak ada record).
+ * Tidak ada default Hadir palsu — guru menandai yang hadir secara
+ * eksplisit, atau pakai "Semua hadir" lalu koreksi yang tidak hadir.
  */
 export default function AttendanceForm({
   academicYear,
@@ -70,11 +75,13 @@ export default function AttendanceForm({
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
-  const [state, setState] = useState<Record<string, AttendanceStatus>>(() => {
-    const map: Record<string, AttendanceStatus> = {};
-    for (const r of initialRows) map[r.id] = r.status ?? "hadir";
-    return map;
-  });
+  const [state, setState] = useState<Record<string, AttendanceStatus | null>>(
+    () => {
+      const map: Record<string, AttendanceStatus | null> = {};
+      for (const r of initialRows) map[r.id] = r.status ?? null;
+      return map;
+    }
+  );
 
   const [saveState, saveAction] = useFormState(saveAttendanceAction, {
     ok: false,
@@ -96,25 +103,44 @@ export default function AttendanceForm({
   });
 
   const counts = useMemo(() => {
-    const c: Record<AttendanceStatus, number> = {
+    const c: Record<AttendanceStatus, number> & { belum: number } = {
       hadir: 0,
+      terlambat: 0,
       izin: 0,
       sakit: 0,
       alpa: 0,
+      belum: 0,
     };
-    for (const r of initialRows) c[state[r.id] ?? "hadir"]++;
+    for (const r of initialRows) {
+      const s = state[r.id] ?? null;
+      if (s === null) c.belum++;
+      else c[s]++;
+    }
     return c;
   }, [initialRows, state]);
 
   function markAllHadir() {
-    const map: Record<string, AttendanceStatus> = {};
+    const map: Record<string, AttendanceStatus | null> = {};
     for (const r of initialRows) map[r.id] = "hadir";
     setState(map);
   }
 
+  function resetMarks() {
+    const map: Record<string, AttendanceStatus | null> = {};
+    for (const r of initialRows) map[r.id] = r.status ?? null;
+    setState(map);
+  }
+
+  // Hanya yang ditandai dikirim — null (Belum Absen) = tidak ada record.
   const itemsJson = JSON.stringify(
-    initialRows.map((r) => ({ studentId: r.id, status: state[r.id] ?? "hadir" }))
+    initialRows
+      .map((r) => ({ studentId: r.id, status: state[r.id] ?? null }))
+      .filter(
+        (it): it is { studentId: string; status: AttendanceStatus } =>
+          it.status !== null
+      )
   );
+  const markedCount = initialRows.filter((r) => (state[r.id] ?? null) !== null).length;
 
   return (
     <div className="space-y-4">
@@ -126,9 +152,19 @@ export default function AttendanceForm({
         >
           Semua hadir
         </button>
+        <button
+          type="button"
+          onClick={resetMarks}
+          className="inline-flex min-h-[48px] items-center rounded-lg border px-4 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted"
+        >
+          Ulangi
+        </button>
         <div className="flex flex-wrap gap-2 text-sm font-semibold" role="status" aria-label="Rekap absensi">
           <span className="rounded-full bg-emerald-100 px-3 py-1 text-emerald-800">
             H: {counts.hadir}
+          </span>
+          <span className="rounded-full bg-orange-100 px-3 py-1 text-orange-800">
+            T: {counts.terlambat}
           </span>
           <span className="rounded-full bg-sky-100 px-3 py-1 text-sky-800">
             I: {counts.izin}
@@ -139,12 +175,17 @@ export default function AttendanceForm({
           <span className="rounded-full bg-red-100 px-3 py-1 text-red-800">
             A: {counts.alpa}
           </span>
+          {counts.belum > 0 && (
+            <span className="rounded-full bg-muted px-3 py-1 text-muted-foreground">
+              Belum: {counts.belum}
+            </span>
+          )}
         </div>
       </div>
 
       <ol className="grid gap-3 lg:grid-cols-2">
         {initialRows.map((row, index) => {
-          const current = state[row.id] ?? "hadir";
+          const current = state[row.id] ?? null;
           return (
             <li
               key={row.id}
@@ -161,10 +202,15 @@ export default function AttendanceForm({
                   </span>
                 )}
               </p>
+              {current === null && (
+                <p className="mt-2 inline-flex rounded-full bg-muted px-2.5 py-0.5 text-xs font-semibold text-muted-foreground">
+                  Belum absen — ketuk salah satu status
+                </p>
+              )}
               <div
                 role="group"
                 aria-label={`Kehadiran ${row.full_name}`}
-                className="mt-3 grid grid-cols-4 gap-2"
+                className="mt-3 grid grid-cols-5 gap-2"
               >
                 {ATTENDANCE_STATUSES.map((s) => (
                   <button
@@ -173,7 +219,10 @@ export default function AttendanceForm({
                     aria-pressed={current === s}
                     aria-label={`${ATTENDANCE_LABELS[s]} — ${row.full_name}`}
                     onClick={() =>
-                      setState((prev) => ({ ...prev, [row.id]: s }))
+                      setState((prev) => ({
+                        ...prev,
+                        [row.id]: prev[row.id] === s ? null : s,
+                      }))
                     }
                     className={cn(
                       "flex min-h-[56px] flex-col items-center justify-center rounded-lg border-2 transition-colors",
@@ -204,10 +253,12 @@ export default function AttendanceForm({
         <input type="hidden" name="itemsJson" value={itemsJson} />
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <p className="tnum flex-1 text-sm text-muted-foreground">
-            {initialRows.length} siswa • {counts.hadir} H • {counts.izin} I •{" "}
-            {counts.sakit} S • {counts.alpa} A
+            {initialRows.length} siswa • {markedCount} ditandai • {counts.hadir}{" "}
+            H • {counts.terlambat} T • {counts.izin} I • {counts.sakit} S •{" "}
+            {counts.alpa} A
+            {counts.belum > 0 && ` • ${counts.belum} belum`}
           </p>
-          <SaveButton disabled={initialRows.length === 0} />
+          <SaveButton disabled={markedCount === 0} />
         </div>
       </form>
     </div>

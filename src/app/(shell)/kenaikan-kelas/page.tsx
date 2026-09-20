@@ -127,7 +127,7 @@ export default async function KenaikanKelasPage({
                             )}
                           </td>
                           <td className="tnum whitespace-nowrap px-4 py-3 text-sm text-muted-foreground">
-                            H {a.hadir} • I {a.izin} • S {a.sakit} • A {a.alpa}
+                            H {a.hadir} • T {a.terlambat ?? 0} • I {a.izin} • S {a.sakit} • A {a.alpa}
                           </td>
                           <td className="whitespace-nowrap px-4 py-3">
                             {s.decision?.recommendation ? (

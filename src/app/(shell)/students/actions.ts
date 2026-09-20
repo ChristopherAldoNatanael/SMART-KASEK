@@ -11,6 +11,14 @@ import {
   updateStudent,
 } from "@/services/student.service";
 import { saveAttendance } from "@/services/student-attendance.service";
+import {
+  closeAttendanceSession,
+  createAttendanceSession,
+} from "@/services/attendance-session.service";
+import {
+  createAttendanceSessionSchema,
+  firstSessionIssueMessage,
+} from "@/schemas/attendance-sessions";
 import { assignHomeroom } from "@/services/teacher.service";
 import { saveMyAssignments } from "@/services/teaching-assignment.service";
 import {
@@ -245,7 +253,7 @@ export async function saveAttendanceAction(
     revalidatePath("/students");
     const c = result.counts;
     return succeed(
-      `Absensi tersimpan: ${c.hadir} hadir, ${c.izin} izin, ${c.sakit} sakit, ${c.alpa} alpa.`
+      `Absensi tersimpan: ${c.hadir} hadir, ${c.terlambat ?? 0} terlambat, ${c.izin} izin, ${c.sakit} sakit, ${c.alpa} alpa.`
     );
   } catch (error) {
     console.error("saveAttendanceAction error:", error);
@@ -442,6 +450,76 @@ export async function bulkDeleteStudentsAction(
   } catch (error) {
     console.error("bulkDeleteStudentsAction error:", error);
     return fail(error instanceof Error ? error.message : "Gagal menghapus data");
+  }
+}
+
+/** Buat sesi QR absensi (guru wali/mapel, Kepala Sekolah, Admin). */
+export async function createAttendanceSessionAction(
+  _prev: StudentActionState,
+  formData: FormData
+): Promise<StudentActionState> {
+  const blocked = await requireStudentAccess();
+  if (blocked) return fail(blocked);
+
+  const parsed = createAttendanceSessionSchema.safeParse({
+    academicYear: formData.get("academicYear"),
+    className: formData.get("className"),
+    date: formData.get("date"),
+    label: formData.get("label"),
+    lateAfter: formData.get("lateAfter"),
+    endsAt: formData.get("endsAt"),
+  });
+  if (!parsed.success) return fail(firstSessionIssueMessage(parsed.error));
+
+  try {
+    const session = await createAttendanceSession({
+      academicYear: parsed.data.academicYear,
+      className: parsed.data.className,
+      date: parsed.data.date,
+      label: parsed.data.label,
+      lateAfter: parsed.data.lateAfter,
+      endsAt: parsed.data.endsAt,
+    });
+    await logAuditEvent({
+      action: "create",
+      entity: "attendance_sessions",
+      entityId: session.id,
+      newData: {
+        class_name: session.class_name,
+        date: session.date,
+        label: session.label,
+      },
+    });
+    revalidatePath("/students/absensi");
+    return succeed(`Sesi QR "${session.label}" Kelas ${session.class_name} sudah dibuka.`);
+  } catch (error) {
+    console.error("createAttendanceSessionAction error:", error);
+    return fail(error instanceof Error ? error.message : "Gagal membuat sesi QR");
+  }
+}
+
+/** Tutup sesi QR — QR langsung tidak berlaku. */
+export async function closeAttendanceSessionAction(
+  _prev: StudentActionState,
+  formData: FormData
+): Promise<StudentActionState> {
+  const blocked = await requireStudentAccess();
+  if (blocked) return fail(blocked);
+  const sessionId = String(formData.get("sessionId") ?? "").trim();
+  if (!sessionId) return fail("Sesi tidak valid");
+  try {
+    await closeAttendanceSession(sessionId);
+    await logAuditEvent({
+      action: "update",
+      entity: "attendance_sessions",
+      entityId: sessionId,
+      newData: { status: "closed" },
+    });
+    revalidatePath("/students/absensi");
+    return succeed("Sesi QR ditutup. QR sudah tidak berlaku.");
+  } catch (error) {
+    console.error("closeAttendanceSessionAction error:", error);
+    return fail(error instanceof Error ? error.message : "Gagal menutup sesi");
   }
 }
 

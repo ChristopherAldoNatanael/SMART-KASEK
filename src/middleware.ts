@@ -3,7 +3,9 @@ import { updateSession } from "@/lib/supabase/middleware";
 
 // /api/health is public on purpose: launch-day monitoring & warm-up.
 // It only reports presence of env vars and bucket names — never secrets.
-const PUBLIC_ROUTES = ["/login", "/register", "/auth/callback", "/api/health"];
+// /absen is the public QR attendance flow (token-scoped, no login).
+// Auth guru/admin tetap berjalan seperti sebelumnya.
+const PUBLIC_ROUTES = ["/login", "/register", "/auth/callback", "/api/health", "/absen"];
 
 function redirectWithCookies(
   url: string,

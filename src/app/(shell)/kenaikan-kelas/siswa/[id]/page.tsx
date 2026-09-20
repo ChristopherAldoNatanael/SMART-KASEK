@@ -84,6 +84,9 @@ export default async function PromotionDetailPage({
             <span className="rounded-full bg-emerald-100 px-3 py-1 text-emerald-800">
               Hadir {attendance.hadir}
             </span>
+            <span className="rounded-full bg-orange-100 px-3 py-1 text-orange-800">
+              Terlambat {attendance.terlambat ?? 0}
+            </span>
             <span className="rounded-full bg-sky-100 px-3 py-1 text-sky-800">
               Izin {attendance.izin}
             </span>
