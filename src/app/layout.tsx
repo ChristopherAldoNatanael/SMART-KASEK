@@ -1,7 +1,16 @@
 import type { Metadata } from "next";
 import "./globals.css";
 
-const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000").replace(/\/+$/, "");
+/**
+ * Canonical publik. Crawler WhatsApp/Telegram/X HANYA menerima URL absolut
+ * (https://...) untuk og:image — path relatif selalu gagal di WhatsApp.
+ * Env didahulukan; fallback domain production agar build tanpa env pun
+ * tetap menghasilkan tag absolut yang valid.
+ */
+const siteUrl = (
+  process.env.NEXT_PUBLIC_SITE_URL || "https://smart-kasek.vercel.app"
+).replace(/\/+$/, "");
+const ogImageUrl = `${siteUrl}/og-image.jpg`;
 const siteTitle = "SMART KASEK";
 const siteDescription =
   "Platform Kepala Sekolah: kelola data sekolah, absensi QR, supervisi, coaching, dan insight berbasis data untuk teacher growth.";
@@ -26,10 +35,12 @@ export const metadata: Metadata = {
     description: siteDescription,
     images: [
       {
-        url: "/og-image.png",
+        url: ogImageUrl,
+        secureUrl: ogImageUrl,
+        type: "image/jpeg",
         width: 1200,
         height: 630,
-        alt: "SMART KASEK — Kelola Sekolah, Bina Guru, Absensi QR",
+        alt: "SMART KASEK - Kelola Sekolah, Bina Guru, Absensi QR",
       },
     ],
   },
@@ -37,7 +48,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: siteTitle,
     description: siteDescription,
-    images: ["/og-image.png"],
+    images: [ogImageUrl],
   },
 };
 
