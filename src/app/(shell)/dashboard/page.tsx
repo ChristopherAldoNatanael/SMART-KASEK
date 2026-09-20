@@ -8,6 +8,7 @@ import {
   LineChart,
   MessagesSquare,
   Sprout,
+  Target,
   TrendingDown,
   TrendingUp,
   Users,
@@ -26,6 +27,8 @@ import { getSupervisionStats } from "@/services/supervision.service";
 import { getCachedSchoolInsight } from "@/services/ai.service";
 import AISchoolInsight from "@/components/dashboard/ai-school-insight";
 import { getPromotionStats } from "@/services/promotion.service";
+import { getProgramSummary } from "@/services/program.service";
+import { currentSemester, semesterLabel } from "@/lib/programs";
 import { currentAcademicYear } from "@/lib/students";
 import { getMyProfileData } from "@/services/profile.service";
 import { Empty, PageHeader, Panel, Stat } from "@/components/common";
@@ -473,6 +476,22 @@ export default async function DashboardPage() {
     promotionSummary = null;
   }
 
+  // Ringkasan Program Sekolah semester berjalan: gagal diam-diam bila
+  // tidak ada akses/data.
+  const programSemester = currentSemester();
+  const programYear = currentAcademicYear();
+  let programSummary: Awaited<ReturnType<typeof getProgramSummary>> | null =
+    null;
+  try {
+    const summary = await getProgramSummary({
+      semester: programSemester,
+      academicYear: programYear,
+    });
+    if (summary.programs.length > 0) programSummary = summary;
+  } catch {
+    programSummary = null;
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -556,6 +575,66 @@ export default async function DashboardPage() {
                 Buka <ArrowRight className="h-3.5 w-3.5" aria-hidden />
               </span>
             </Link>
+          )}
+
+          {programSummary && (
+            <Panel
+              title={`Program Sekolah — ${semesterLabel(programSemester)} ${programYear}`}
+              description="Rata-rata jalannya kegiatan semester ini (yang batal tidak dihitung)."
+              action={
+                <Link
+                  href="/programs"
+                  className="inline-flex min-h-[40px] items-center gap-1 text-sm font-medium text-brand hover:underline"
+                >
+                  Kelola program
+                  <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+                </Link>
+              }
+            >
+              <div className="grid gap-6 lg:grid-cols-[220px_1fr_1fr]">
+                <div className="flex flex-col justify-center">
+                  <p className="text-sm text-muted-foreground">Rata-rata jalan</p>
+                  <p className="tnum text-5xl font-bold">
+                    {programSummary.overall !== null ? `${programSummary.overall}%` : "—"}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {programSummary.counts.ongoing} berjalan •{" "}
+                    {programSummary.counts.completed} selesai •{" "}
+                    {programSummary.counts.planned} rencana
+                  </p>
+                </div>
+                <div>
+                  <p className="mb-2 text-sm font-semibold">Keadaan kegiatan</p>
+                  <DonutChart
+                    data={[
+                      { name: "Berjalan", value: programSummary.counts.ongoing, color: "#d97706" },
+                      { name: "Rencana", value: programSummary.counts.planned, color: "#2563eb" },
+                      { name: "Selesai", value: programSummary.counts.completed, color: "#059669" },
+                      ...(programSummary.counts.cancelled > 0
+                        ? [{ name: "Batal", value: programSummary.counts.cancelled, color: "#94a3b8" }]
+                        : []),
+                    ].filter((d) => d.value > 0)}
+                    height={190}
+                  />
+                </div>
+                <div>
+                  <p className="mb-2 text-sm font-semibold">Jalannya tiap kegiatan</p>
+                  <BarChart
+                    data={programSummary.programs
+                      .filter((p) => p.progress !== null)
+                      .slice(0, 6)
+                      .map((p) => ({
+                        name:
+                          p.name.length > 14 ? `${p.name.slice(0, 13)}…` : p.name,
+                        value: p.progress ?? 0,
+                        color: p.status === "completed" ? "#059669" : "#2563eb",
+                      }))}
+                    height={190}
+                    maxValue={100}
+                  />
+                </div>
+              </div>
+            </Panel>
           )}
 
           <Panel
@@ -706,6 +785,17 @@ export default async function DashboardPage() {
                 title="Data Guru"
                 description={`${stats.teacherCount} guru terdaftar. Kelola data dan kompetensi.`}
                 accent="bg-slate-100 text-slate-600"
+              />
+              <Shortcut
+                href="/programs"
+                icon={Target}
+                title="Program Sekolah"
+                description={
+                  programSummary && programSummary.overall !== null
+                    ? `Rata-rata sudah jalan ${programSummary.overall}% dari ${programSummary.programs.length} kegiatan.`
+                    : "Tambah dan pantau kegiatan sekolah."
+                }
+                accent="bg-cyan-100 text-cyan-600"
               />
             </div>
           </div>

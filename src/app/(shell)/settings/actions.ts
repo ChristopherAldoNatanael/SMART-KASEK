@@ -6,6 +6,7 @@ import { hasRole } from "@/lib/permissions";
 import {
   getMySchool,
   updateSchool,
+  uploadSchoolDocument,
   uploadSchoolLogo,
 } from "@/services/school.service";
 import {
@@ -18,8 +19,10 @@ import {
 } from "@/services/profile.service";
 import { logAuditEvent } from "@/services/audit.service";
 import {
+  ALLOWED_DOC_TYPES,
   ALLOWED_LOGO_TYPES,
   firstIssueMessage,
+  MAX_DOC_BYTES,
   MAX_LOGO_BYTES,
   updateSchoolSchema,
 } from "@/schemas/school-settings";
@@ -243,10 +246,10 @@ export async function uploadLogoAction(
 
   try {
     const url = await uploadSchoolLogo(file);
-    // RPC mewajibkan nama — teruskan nama yang sudah ada agar tak berubah.
     const current = await getMySchool();
     if (!current) throw new Error("Akun Anda belum terhubung ke sekolah.");
-    const school = await updateSchool({ name: current.name, logoUrl: url });
+    // RPC menulis SEMUA kolom — teruskan nilai yang ada agar tak terhapus.
+    const school = await updateSchool({ ...schoolFieldsOf(current), logoUrl: url });
     await logAuditEvent({
       action: "update",
       entity: "schools",
@@ -260,6 +263,112 @@ export async function uploadLogoAction(
     return {
       ok: false,
       error: error instanceof Error ? error.message : "Gagal mengunggah logo",
+    };
+  }
+}
+
+/** Teruskan semua nilai sekolah agar RPC tak menghapus kolom lain. */
+function schoolFieldsOf(current: NonNullable<Awaited<ReturnType<typeof getMySchool>>>) {
+  return {
+    name: current.name,
+    npsn: current.npsn ?? undefined,
+    address: current.address ?? undefined,
+    village: current.village ?? undefined,
+    district: current.district ?? undefined,
+    city: current.city ?? undefined,
+    province: current.province ?? undefined,
+    phone: current.phone ?? undefined,
+    email: current.email ?? undefined,
+    principalName: current.principal_name ?? undefined,
+    principalNip: current.principal_nip ?? undefined,
+    logoSize: current.logo_size ?? undefined,
+  };
+}
+
+/**
+ * Unggah tanda tangan Kepala Sekolah (PNG/JPG/WebP, maks 2 MB).
+ * Dipakai otomatis di dokumen cetak.
+ */
+export async function uploadSignatureAction(
+  _prev: SettingsActionState,
+  formData: FormData
+): Promise<SettingsActionState> {
+  const denied = await requireSettingsAccess();
+  if (denied) return { ok: false, error: denied };
+
+  const file = formData.get("signature");
+  if (!(file instanceof File) || file.size === 0) {
+    return { ok: false, error: "Pilih berkas tanda tangan terlebih dahulu." };
+  }
+  if (!ALLOWED_DOC_TYPES.includes(file.type as (typeof ALLOWED_DOC_TYPES)[number])) {
+    return { ok: false, error: "Format tanda tangan harus PNG, JPG, atau WebP." };
+  }
+  if (file.size > MAX_DOC_BYTES) {
+    return { ok: false, error: "Ukuran berkas maksimal 2 MB." };
+  }
+
+  try {
+    const url = await uploadSchoolDocument(file, "signature");
+    const current = await getMySchool();
+    if (!current) throw new Error("Akun Anda belum terhubung ke sekolah.");
+    const school = await updateSchool({ ...schoolFieldsOf(current), signatureUrl: url });
+    await logAuditEvent({
+      action: "update",
+      entity: "schools",
+      entityId: school.id,
+      newData: { signature_url: url },
+    });
+    revalidateSettings();
+    return { ok: true, error: null };
+  } catch (error) {
+    console.error("uploadSignatureAction error:", error);
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Gagal mengunggah tanda tangan",
+    };
+  }
+}
+
+/**
+ * Unggah stempel sekolah (PNG/JPG/WebP, maks 2 MB).
+ * Dipakai otomatis di dokumen cetak.
+ */
+export async function uploadStampAction(
+  _prev: SettingsActionState,
+  formData: FormData
+): Promise<SettingsActionState> {
+  const denied = await requireSettingsAccess();
+  if (denied) return { ok: false, error: denied };
+
+  const file = formData.get("stamp");
+  if (!(file instanceof File) || file.size === 0) {
+    return { ok: false, error: "Pilih berkas stempel terlebih dahulu." };
+  }
+  if (!ALLOWED_DOC_TYPES.includes(file.type as (typeof ALLOWED_DOC_TYPES)[number])) {
+    return { ok: false, error: "Format stempel harus PNG, JPG, atau WebP." };
+  }
+  if (file.size > MAX_DOC_BYTES) {
+    return { ok: false, error: "Ukuran berkas maksimal 2 MB." };
+  }
+
+  try {
+    const url = await uploadSchoolDocument(file, "stamp");
+    const current = await getMySchool();
+    if (!current) throw new Error("Akun Anda belum terhubung ke sekolah.");
+    const school = await updateSchool({ ...schoolFieldsOf(current), stampUrl: url });
+    await logAuditEvent({
+      action: "update",
+      entity: "schools",
+      entityId: school.id,
+      newData: { stamp_url: url },
+    });
+    revalidateSettings();
+    return { ok: true, error: null };
+  } catch (error) {
+    console.error("uploadStampAction error:", error);
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Gagal mengunggah stempel",
     };
   }
 }

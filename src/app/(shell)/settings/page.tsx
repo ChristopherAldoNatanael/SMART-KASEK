@@ -6,6 +6,8 @@ import { getMyAccount } from "@/services/profile.service";
 import {
   SchoolLogoForm,
   SchoolProfileForm,
+  SchoolSignatureForm,
+  SchoolStampForm,
 } from "@/components/settings/settings-forms";
 import {
   AccountEmailForm,
@@ -206,9 +208,21 @@ export default async function SettingsPage() {
               </Panel>
               <Panel
                 title="Logo Sekolah"
-                description="Tampil di sidebar Kepala Sekolah dan seluruh guru."
+                description="Tampil di sidebar dan kop dokumen cetak."
               >
                 <SchoolLogoForm school={school} />
+              </Panel>
+              <Panel
+                title="Tanda Tangan Kepala Sekolah"
+                description="Tampil otomatis di dokumen cetak. Cukup unggah sekali."
+              >
+                <SchoolSignatureForm school={school} />
+              </Panel>
+              <Panel
+                title="Stempel Sekolah"
+                description="Tampil otomatis di dokumen cetak, menimpa area tanda tangan."
+              >
+                <SchoolStampForm school={school} />
               </Panel>
             </>
           ) : (

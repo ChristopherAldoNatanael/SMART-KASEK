@@ -50,6 +50,15 @@ export const ALLOWED_LOGO_TYPES = [
 
 export const MAX_LOGO_BYTES = 2 * 1024 * 1024;
 
+/** TTD & stempel: tanpa SVG (hasil scan/foto selalu raster). */
+export const ALLOWED_DOC_TYPES = [
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+] as const;
+
+export const MAX_DOC_BYTES = 2 * 1024 * 1024;
+
 export function firstIssueMessage(error: z.ZodError): string {
   return error.issues[0]?.message ?? "Input tidak valid";
 }

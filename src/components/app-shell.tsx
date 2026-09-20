@@ -95,7 +95,7 @@ export function AppShell({
       />
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 border-b bg-background/90 backdrop-blur">
+        <header className="sticky top-0 z-30 border-b bg-background/90 backdrop-blur print:hidden">
           <div className="flex h-14 items-center justify-between gap-2 px-3 sm:px-5">
             <div className="flex min-w-0 items-center gap-1.5">
               <button
@@ -148,7 +148,7 @@ export function AppShell({
             </div>
           </div>
         </header>
-        <main className="mx-auto w-full max-w-6xl flex-1 space-y-6 p-4 sm:p-6">
+        <main className="mx-auto w-full max-w-6xl flex-1 space-y-6 p-4 sm:p-6 print:m-0 print:max-w-none print:space-y-0 print:p-0">
           {children}
         </main>
       </div>

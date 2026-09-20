@@ -62,6 +62,8 @@ export interface Database {
           logo_size: number | null;
           principal_name: string | null;
           principal_nip: string | null;
+          signature_url: string | null;
+          stamp_url: string | null;
           invite_code: string | null;
           created_at: string;
           updated_at: string;
@@ -81,6 +83,8 @@ export interface Database {
           logo_size?: number | null;
           principal_name?: string | null;
           principal_nip?: string | null;
+          signature_url?: string | null;
+          stamp_url?: string | null;
           invite_code?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -100,6 +104,8 @@ export interface Database {
           logo_size?: number | null;
           principal_name?: string | null;
           principal_nip?: string | null;
+          signature_url?: string | null;
+          stamp_url?: string | null;
           invite_code?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -1159,6 +1165,8 @@ export interface Database {
           status: ProgramStatus;
           budget: number | null;
           responsible_user_id: string | null;
+          semester: number | null;
+          academic_year: string | null;
           created_at: string;
         };
         Insert: {
@@ -1172,6 +1180,8 @@ export interface Database {
           status?: ProgramStatus;
           budget?: number | null;
           responsible_user_id?: string | null;
+          semester?: number | null;
+          academic_year?: string | null;
           created_at?: string;
         };
         Update: {
@@ -1185,6 +1195,8 @@ export interface Database {
           status?: ProgramStatus;
           budget?: number | null;
           responsible_user_id?: string | null;
+          semester?: number | null;
+          academic_year?: string | null;
           created_at?: string;
         };
       };

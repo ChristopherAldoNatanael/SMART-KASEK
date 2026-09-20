@@ -7,6 +7,7 @@ import {
   MessagesSquare,
   School,
   Settings,
+  Target,
   TrendingUp,
   UserRound,
   Users,
@@ -32,6 +33,7 @@ const PRINCIPAL_NAV: NavItem[] = [
   { href: "/students", label: "Kesiswaan", icon: School },
   { href: "/kenaikan-kelas", label: "Kenaikan Kelas", icon: Award },
   { href: "/administration", label: "Administrasi", icon: FolderKanban },
+  { href: "/programs", label: "Program Sekolah", icon: Target },
   { href: "/settings", label: "Pengaturan", icon: Settings },
 ];
 

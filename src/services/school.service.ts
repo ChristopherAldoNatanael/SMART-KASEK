@@ -289,6 +289,8 @@ export async function updateSchool(input: {
   principalNip?: string;
   logoUrl?: string | null;
   logoSize?: number;
+  signatureUrl?: string | null;
+  stampUrl?: string | null;
 }): Promise<SchoolWithInvite> {
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("update_school", {
@@ -305,6 +307,8 @@ export async function updateSchool(input: {
     p_principal_nip: input.principalNip ?? null,
     p_logo_url: input.logoUrl ?? null,
     p_logo_size: input.logoSize ?? null,
+    p_signature_url: input.signatureUrl ?? null,
+    p_stamp_url: input.stampUrl ?? null,
   });
   if (error) throw new Error(rpcErrorMessage(error));
   return data as SchoolWithInvite;
@@ -339,4 +343,38 @@ export async function uploadSchoolLogo(file: File): Promise<string> {
 
   const base = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
   return `${base.replace(/\/$/, "")}/storage/v1/object/public/school-logos/${path}`;
+}
+
+function docExtension(mime: string): string {
+  if (mime === "image/jpeg") return "jpg";
+  if (mime === "image/webp") return "webp";
+  return "png";
+}
+
+/**
+ * Unggah tanda tangan / stempel ke bucket school-docs.
+ * Pola yang sama seperti logo: folder per sekolah + RLS principal/admin.
+ */
+export async function uploadSchoolDocument(
+  file: File,
+  kind: "signature" | "stamp"
+): Promise<string> {
+  const supabase = await createClient();
+  const { profile, error: profileError } = await getOwnProfile();
+  if (profileError || !profile?.school_id) {
+    throw new Error("Akun Anda belum terhubung ke sekolah.");
+  }
+  if (profile.role !== "principal" && profile.role !== "admin") {
+    throw new Error("Hanya Kepala Sekolah yang dapat mengunggah dokumen ini.");
+  }
+
+  const label = kind === "signature" ? "ttd" : "stempel";
+  const path = `${profile.school_id}/${label}-${Date.now()}.${docExtension(file.type)}`;
+  const { error: uploadError } = await supabase.storage
+    .from("school-docs")
+    .upload(path, file, { contentType: file.type, upsert: true });
+  if (uploadError) throw new Error(rpcErrorMessage(uploadError));
+
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+  return `${base.replace(/\/$/, "")}/storage/v1/object/public/school-docs/${path}`;
 }

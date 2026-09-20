@@ -1,11 +1,14 @@
 "use client";
 
 import { useFormState, useFormStatus } from "react-dom";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   saveSchoolProfileAction,
   uploadLogoAction,
+  uploadSignatureAction,
+  uploadStampAction,
 } from "@/app/(shell)/settings/actions";
+import { removeWhiteBackground } from "@/lib/signature-image";
 import type { Database } from "@/types/database";
 
 type School = Database["public"]["Tables"]["schools"]["Row"];
@@ -37,12 +40,21 @@ function Field({
   );
 }
 
-function SubmitButton({ label, pendingLabel }: { label: string; pendingLabel: string }) {
+function SubmitButton({
+  label,
+  pendingLabel,
+  disabled,
+}: {
+  label: string;
+  pendingLabel: string;
+  disabled?: boolean;
+}) {
   const { pending } = useFormStatus();
+  const blocked = pending || disabled;
   return (
     <button
       type="submit"
-      disabled={pending}
+      disabled={blocked}
       className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50"
     >
       {pending ? pendingLabel : label}
@@ -262,6 +274,176 @@ export function SchoolLogoForm({ school }: { school: School }) {
         <SubmitButton label="Unggah Logo" pendingLabel="Mengunggah…" />
       </form>
       <LogoSizeForm school={school} />
+    </div>
+  );
+}
+
+/**
+ * Pilih berkas TTD/stempel: background putih dihapus otomatis di browser,
+ * hasilnya PNG transparan, pratinjau menampilkan hasil akhirnya.
+ */
+function useCleanImage() {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [cleaned, setCleaned] = useState(false);
+  const reqId = useRef(0);
+
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    const id = ++reqId.current;
+    setPreview((old) => {
+      if (old) URL.revokeObjectURL(old);
+      return null;
+    });
+    setCleaned(false);
+    if (!file) return;
+    setBusy(true);
+    const result = await removeWhiteBackground(file);
+    if (reqId.current !== id) return;
+    if (result.cleaned && inputRef.current) {
+      // Ganti berkas di input dengan hasil bersih (tetap nama field sama).
+      const dt = new DataTransfer();
+      dt.items.add(result.file);
+      inputRef.current.files = dt.files;
+    }
+    setPreview(URL.createObjectURL(result.file));
+    setCleaned(result.cleaned);
+    setBusy(false);
+  }
+
+  return { inputRef, preview, busy, cleaned, handleFile };
+}
+
+/**
+ * Unggah tanda tangan Kepala Sekolah — tampil otomatis di dokumen cetak.
+ * Tips: foto/scan di kertas putih polos dengan cahaya rata.
+ */
+export function SchoolSignatureForm({ school }: { school: School }) {
+  const [state, formAction] = useFormState(uploadSignatureAction, {
+    ok: false,
+    error: null,
+  });
+  const { inputRef, preview, busy, cleaned, handleFile } = useCleanImage();
+
+  const shown = preview ?? school.signature_url;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-4">
+        <span className="flex h-20 w-48 shrink-0 items-center justify-center overflow-hidden rounded-xl border bg-white">
+          {shown ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={shown}
+              alt="Tanda tangan Kepala Sekolah"
+              className="h-full w-full object-contain p-1.5"
+            />
+          ) : (
+            <span className="px-2 text-center text-xs text-muted-foreground">
+              Belum ada
+            </span>
+          )}
+        </span>
+        <p className="text-sm text-muted-foreground">
+          Tanda tangan tampil otomatis di dokumen cetak. Background putih
+          dihapus otomatis menjadi PNG transparan. PNG/JPG/WebP, maksimal 2 MB.
+        </p>
+      </div>
+      <form action={formAction} className="space-y-3">
+        <FormMessage error={state.error} ok={state.ok} />
+        <Field id="signature" label="Berkas Tanda Tangan Baru">
+          <input
+            ref={inputRef}
+            id="signature"
+            name="signature"
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            onChange={handleFile}
+            className="w-full text-sm file:mr-3 file:rounded-md file:border file:px-3 file:py-1.5 file:text-xs file:font-medium hover:file:bg-muted"
+          />
+          {busy && (
+            <p className="text-xs text-muted-foreground">Menghapus background…</p>
+          )}
+          {!busy && cleaned && (
+            <p className="text-xs font-medium text-emerald-700">
+              Background sudah dihapus — tinggal TTD-nya. Silakan unggah.
+            </p>
+          )}
+        </Field>
+        <SubmitButton
+          label={busy ? "Tunggu sebentar…" : "Unggah Tanda Tangan"}
+          pendingLabel="Mengunggah…"
+          disabled={busy}
+        />
+      </form>
+    </div>
+  );
+}
+
+/**
+ * Unggah stempel sekolah — tampil otomatis di dokumen cetak,
+ * menimpa area tanda tangan seperti dokumen kertas.
+ */
+export function SchoolStampForm({ school }: { school: School }) {
+  const [state, formAction] = useFormState(uploadStampAction, {
+    ok: false,
+    error: null,
+  });
+  const { inputRef, preview, busy, cleaned, handleFile } = useCleanImage();
+
+  const shown = preview ?? school.stamp_url;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-4">
+        <span className="flex h-28 w-28 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 bg-white">
+          {shown ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={shown}
+              alt="Stempel sekolah"
+              className="h-full w-full object-contain p-1.5"
+            />
+          ) : (
+            <span className="px-2 text-center text-xs text-muted-foreground">
+              Belum ada
+            </span>
+          )}
+        </span>
+        <p className="text-sm text-muted-foreground">
+          Stempel tampil otomatis di dokumen cetak, menimpa area tanda
+          tangan. Background putih dihapus otomatis menjadi PNG transparan.
+          PNG/JPG/WebP, maksimal 2 MB.
+        </p>
+      </div>
+      <form action={formAction} className="space-y-3">
+        <FormMessage error={state.error} ok={state.ok} />
+        <Field id="stamp" label="Berkas Stempel Baru">
+          <input
+            ref={inputRef}
+            id="stamp"
+            name="stamp"
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            onChange={handleFile}
+            className="w-full text-sm file:mr-3 file:rounded-md file:border file:px-3 file:py-1.5 file:text-xs file:font-medium hover:file:bg-muted"
+          />
+          {busy && (
+            <p className="text-xs text-muted-foreground">Menghapus background…</p>
+          )}
+          {!busy && cleaned && (
+            <p className="text-xs font-medium text-emerald-700">
+              Background sudah dihapus. Silakan unggah.
+            </p>
+          )}
+        </Field>
+        <SubmitButton
+          label={busy ? "Tunggu sebentar…" : "Unggah Stempel"}
+          pendingLabel="Mengunggah…"
+          disabled={busy}
+        />
+      </form>
     </div>
   );
 }

@@ -194,7 +194,7 @@ export function Sidebar({
   return (
     <aside
       className={cn(
-        "sticky top-0 hidden h-screen shrink-0 flex-col border-r border-border bg-card transition-[width] duration-200 md:flex",
+        "sticky top-0 hidden h-screen shrink-0 flex-col border-r border-border bg-card transition-[width] duration-200 md:flex print:hidden",
         collapsed ? "w-[68px]" : "w-60"
       )}
     >
@@ -230,7 +230,10 @@ export function SidebarDrawer({
 }) {
   return (
     <div
-      className={cn("fixed inset-0 z-50 md:hidden", !open && "pointer-events-none")}
+      className={cn(
+        "fixed inset-0 z-50 md:hidden print:hidden",
+        !open && "pointer-events-none"
+      )}
       aria-hidden={!open}
     >
       <div
