@@ -5,8 +5,10 @@ import {
   ArrowRight,
   ArrowUpRight,
   ClipboardCheck,
+  GraduationCap,
   LineChart,
   MessagesSquare,
+  School,
   Sprout,
   Target,
   TrendingDown,
@@ -28,8 +30,20 @@ import { getCachedSchoolInsight } from "@/services/ai.service";
 import AISchoolInsight from "@/components/dashboard/ai-school-insight";
 import { getPromotionStats } from "@/services/promotion.service";
 import { getProgramSummary } from "@/services/program.service";
+import { getStudentListMeta } from "@/services/student.service";
+import { getActiveSchoolClassNames } from "@/services/school-class.service";
+import { getMyTeacher } from "@/services/teacher.service";
+import {
+  getMyAssignments,
+  getTeacherClassAccess,
+} from "@/services/teaching-assignment.service";
+import { getAttendanceSheet } from "@/services/student-attendance.service";
 import { currentSemester, semesterLabel } from "@/lib/programs";
-import { currentAcademicYear } from "@/lib/students";
+import {
+  allowedClassesFor,
+  currentAcademicYear,
+  todayISO,
+} from "@/lib/students";
 import { getMyProfileData } from "@/services/profile.service";
 import { Empty, PageHeader, Panel, Stat } from "@/components/common";
 import InviteCodeCard from "@/components/school/invite-code-card";
@@ -145,13 +159,135 @@ export default async function DashboardPage() {
       profileData?.coachings?.filter((c) => c.status === "completed") ?? [];
     const recentSupervisions = profileData?.supervisions?.slice(0, 3) ?? [];
 
+    // Kelas yang diampu: wali (absensi hari ini) + mapel (daftar ajar).
+    // Gagal diam-diam — bagian ini pelengkap, bukan penentu halaman.
+    let homeroomCard: {
+      className: string;
+      year: string;
+      total: number;
+      filled: number;
+    } | null = null;
+    let taughtClasses: { className: string; subject: string }[] = [];
+    try {
+      const [myTeacher, assignments, access] = await Promise.all([
+        getMyTeacher().catch(() => null),
+        getMyAssignments().catch(() => []),
+        getTeacherClassAccess().catch(() => null),
+      ]);
+      const year = currentAcademicYear();
+      taughtClasses = assignments
+        .filter((a) => a.academic_year === year && a.class_name.trim() !== "")
+        .map((a) => ({ className: a.class_name, subject: a.subject }));
+      const homeroom = (myTeacher?.homeroom_class ?? "").trim() || null;
+      if (homeroom) {
+        const sheet = await getAttendanceSheet({
+          academicYear: year,
+          className: homeroom,
+          date: todayISO(),
+          allowedClasses: allowedClassesFor(access, year),
+        }).catch(() => null);
+        if (sheet) {
+          homeroomCard = {
+            className: homeroom,
+            year,
+            total: sheet.rows.length,
+            filled: sheet.filled,
+          };
+        }
+      }
+    } catch {
+      homeroomCard = null;
+      taughtClasses = [];
+    }
+
     return (
       <div className="space-y-6">
         <PageHeader
           eyebrow={profileData?.teacher?.subject ?? "Guru"}
           title={`${greeting}${user?.fullName ? `, ${user.fullName}` : ""}`}
-          description="Pantau perkembangan dan tindak lanjut Anda."
+          description="Pantau kelas, absensi, perkembangan, dan tindak lanjut Anda."
         />
+
+        {/* Wali kelas: absensi hari ini */}
+        {homeroomCard && (
+          <div className="rounded-xl border bg-card p-5 shadow-[0_1px_2px_rgba(16,24,40,0.05)]">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-brand">
+                  Wali Kelas {homeroomCard.className}
+                </p>
+                <p className="tnum mt-1 text-2xl font-bold">
+                  {homeroomCard.filled}/{homeroomCard.total}{" "}
+                  <span className="text-sm font-medium text-muted-foreground">
+                    absensi hari ini
+                  </span>
+                </p>
+              </div>
+              <Link
+                href={`/students/absensi?tahun=${encodeURIComponent(homeroomCard.year)}&kelas=${encodeURIComponent(homeroomCard.className)}`}
+                className="inline-flex min-h-[48px] items-center rounded-lg bg-primary px-5 py-2.5 text-[15px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+              >
+                Isi absensi
+              </Link>
+            </div>
+            <div
+              className="mt-3 h-2.5 overflow-hidden rounded-full bg-muted"
+              role="progressbar"
+              aria-valuenow={homeroomCard.filled}
+              aria-valuemin={0}
+              aria-valuemax={Math.max(homeroomCard.total, 1)}
+              aria-label={`Absensi Kelas ${homeroomCard.className} hari ini`}
+            >
+              <div
+                className="h-full rounded-full bg-emerald-600 transition-all"
+                style={{
+                  width: `${
+                    homeroomCard.total > 0
+                      ? Math.round((homeroomCard.filled / homeroomCard.total) * 100)
+                      : 0
+                  }%`,
+                }}
+              />
+            </div>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {homeroomCard.total - homeroomCard.filled > 0
+                ? `${homeroomCard.total - homeroomCard.filled} anak belum tercatat.`
+                : "Semua anak sudah tercatat hari ini."}
+            </p>
+          </div>
+        )}
+
+        {/* Guru mapel: kelas yang diajar */}
+        {taughtClasses.length > 0 && (
+          <Panel
+            title="Kelas yang saya ajar"
+            description="Jalan pintas absensi tiap kelas."
+          >
+            <ul className="divide-y">
+              {taughtClasses.map((c) => (
+                <li
+                  key={`${c.className}-${c.subject}`}
+                  className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-[15px] font-semibold">
+                      Kelas {c.className}
+                    </p>
+                    <p className="truncate text-sm text-muted-foreground">
+                      {c.subject || "Tanpa mapel"}
+                    </p>
+                  </div>
+                  <Link
+                    href={`/students/absensi?tahun=${encodeURIComponent(currentAcademicYear())}&kelas=${encodeURIComponent(c.className)}`}
+                    className="shrink-0 rounded-lg border px-3.5 py-2 text-sm font-semibold transition-colors hover:bg-muted"
+                  >
+                    Absensi
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </Panel>
+        )}
 
         {/* Growth Score Card */}
         {latest ? (
@@ -423,13 +559,41 @@ export default async function DashboardPage() {
   let loadError: string | null = null;
   let trendData: { period: string; average: number | null }[] = [];
 
+  let schoolSize: {
+    students: number;
+    male: number;
+    female: number;
+    classes: number;
+    perClass: { name: string; total: number }[];
+  } | null = null;
+
   try {
-    const [overview, coaching, supervision, code] = await Promise.all([
-      getSchoolGrowthOverview(),
-      getCoachingStats(),
-      getSupervisionStats(),
-      getMySchoolInviteCode(),
-    ]);
+    const [overview, coaching, supervision, code, studentMeta, classNames] =
+      await Promise.all([
+        getSchoolGrowthOverview(),
+        getCoachingStats(),
+        getSupervisionStats(),
+        getMySchoolInviteCode(),
+        getStudentListMeta(currentAcademicYear()).catch(() => null),
+        getActiveSchoolClassNames().catch(() => [] as string[]),
+      ]);
+    schoolSize = studentMeta
+      ? {
+          students: studentMeta.stats.total,
+          male: studentMeta.stats.male,
+          female: studentMeta.stats.female,
+          classes: classNames.length,
+          perClass: studentMeta.classCounts
+            .filter((c) => (c.name ?? "") !== "")
+            .map((c) => ({ name: c.name ?? "Tanpa kelas", total: c.total })),
+        }
+      : {
+          students: 0,
+          male: 0,
+          female: 0,
+          classes: classNames.length,
+          perClass: [],
+        };
     stats = {
       teacherCount: overview.teacherCount,
       averageGrowth: overview.averageOverall,
@@ -512,12 +676,31 @@ export default async function DashboardPage() {
       {stats && (
         <>
           {/* Stat Cards */}
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <Stat
+              icon={GraduationCap}
+              label="Total Siswa"
+              value={schoolSize?.students ?? "—"}
+              accent="bg-blue-100 text-blue-700"
+              sub={
+                schoolSize
+                  ? `${schoolSize.male} laki-laki • ${schoolSize.female} perempuan`
+                  : "Belum ada data"
+              }
+            />
             <Stat
               icon={Users}
               label="Total Guru"
               value={stats.teacherCount}
+              accent="bg-violet-100 text-violet-700"
               sub={`${stats.positiveGrowth} tumbuh positif`}
+            />
+            <Stat
+              icon={School}
+              label="Total Kelas"
+              value={schoolSize?.classes ?? "—"}
+              accent="bg-amber-100 text-amber-700"
+              sub="Kelas aktif tahun ini"
             />
             <Stat
               icon={LineChart}
@@ -549,9 +732,52 @@ export default async function DashboardPage() {
               icon={MessagesSquare}
               label="Coaching"
               value={stats.coachingTotal}
+              accent="bg-cyan-100 text-cyan-700"
               sub={`Supervisi ${stats.supervisionCompleted}/${stats.supervisionTotal}`}
             />
           </div>
+
+          {/* Grafik kesiswaan */}
+          {schoolSize && schoolSize.students > 0 && (
+            <div className="grid gap-4 lg:grid-cols-3">
+              <Panel
+                title="Siswa per Kelas"
+                description="Jumlah siswa tiap kelas tahun ini"
+                className="lg:col-span-2"
+              >
+                <BarChart
+                  data={schoolSize.perClass.map((c) => ({
+                    name: c.name,
+                    value: c.total,
+                  }))}
+                  height={210}
+                  maxValue={Math.max(
+                    ...schoolSize.perClass.map((c) => c.total),
+                    1
+                  )}
+                />
+              </Panel>
+              <Panel title="Laki-laki • Perempuan">
+                <DonutChart
+                  data={[
+                    { name: "Laki-laki", value: schoolSize.male, color: "#2563eb" },
+                    { name: "Perempuan", value: schoolSize.female, color: "#e11d48" },
+                  ].filter((d) => d.value > 0)}
+                  height={170}
+                />
+                <div className="mt-3 flex justify-center gap-4 text-xs">
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-full bg-blue-600" />
+                    Laki-laki {schoolSize.male}
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-full bg-rose-600" />
+                    Perempuan {schoolSize.female}
+                  </span>
+                </div>
+              </Panel>
+            </div>
+          )}
 
           {promotionSummary && (
             <Link
@@ -597,9 +823,13 @@ export default async function DashboardPage() {
                   <p className="tnum text-5xl font-bold">
                     {programSummary.overall !== null ? `${programSummary.overall}%` : "—"}
                   </p>
+                  <p className="mt-2 text-sm font-semibold">
+                    {programSummary.counts.completed} dari{" "}
+                    {programSummary.programs.length - programSummary.counts.cancelled}{" "}
+                    program terlaksana
+                  </p>
                   <p className="mt-1 text-xs text-muted-foreground">
                     {programSummary.counts.ongoing} berjalan •{" "}
-                    {programSummary.counts.completed} selesai •{" "}
                     {programSummary.counts.planned} rencana
                   </p>
                 </div>

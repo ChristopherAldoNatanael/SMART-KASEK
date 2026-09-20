@@ -52,12 +52,15 @@ export function Stat({
   value,
   sub,
   tone = "default",
+  accent,
 }: {
   icon: LucideIcon;
   label: string;
   value: React.ReactNode;
   sub?: React.ReactNode;
   tone?: StatTone;
+  /** Warna ikon khusus, cth. "bg-blue-100 text-blue-700". Opsional. */
+  accent?: string;
 }) {
   return (
     <div className="rounded-xl border bg-card p-5 shadow-[0_1px_2px_rgba(16,24,40,0.05)]">
@@ -65,9 +68,12 @@ export function Stat({
         <span
           className={cn(
             "flex h-7 w-7 items-center justify-center rounded-md",
-            tone === "brand" && "bg-brand/10 text-brand",
-            tone === "danger" && "bg-destructive/10 text-destructive",
-            tone === "default" && "bg-muted text-muted-foreground"
+            accent ??
+              (tone === "brand"
+                ? "bg-brand/10 text-brand"
+                : tone === "danger"
+                  ? "bg-destructive/10 text-destructive"
+                  : "bg-muted text-muted-foreground")
           )}
         >
           <Icon className="h-4 w-4" aria-hidden />
