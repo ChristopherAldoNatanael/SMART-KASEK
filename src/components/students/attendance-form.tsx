@@ -63,6 +63,10 @@ function SaveButton({ disabled }: { disabled: boolean }) {
  * Yang belum ditandai = Belum Absen (null, tidak ada record).
  * Tidak ada default Hadir palsu — guru menandai yang hadir secara
  * eksplisit, atau pakai "Semua hadir" lalu koreksi yang tidak hadir.
+ *
+ * LIVE: halaman disegarkan otomatis tiap beberapa detik (lihat
+ * SessionAutoRefresh). Data QR yang baru masuk di-merge ke baris yang
+ * BELUM disentuh guru; tanda manual guru tidak pernah tertimpa.
  */
 export default function AttendanceForm({
   academicYear,
@@ -91,18 +95,48 @@ export default function AttendanceForm({
     message: null,
   });
 
+  // ID yang sudah diketuk guru — baris ini tidak boleh tertimpa data QR
+  // yang masuk belakangan (koreksi manual selalu menang).
+  const touchedRef = useRef<Set<string>>(new Set());
+
   const lastSave = useRef(saveState);
   useEffect(() => {
     if (lastSave.current !== saveState) {
       lastSave.current = saveState;
       if (saveState.error) {
-        toast.error("Belum berhasil menyimpan", saveState.error);
+        toast.error("Absensi belum tersimpan", saveState.error);
       } else if (saveState.ok) {
+        // Tersimpan = state lokal sudah sama dengan server.
+        touchedRef.current.clear();
         toast.success("Absensi tersimpan", saveState.message ?? undefined);
         startTransition(() => router.refresh());
       }
     }
   });
+
+  // Live-merge: saat data server baru tiba (refresh otomatis), adopsi
+  // status ke baris yang belum disentuh guru. Baris sentuhan guru dibiarkan.
+  const rowsSignature = JSON.stringify(
+    initialRows.map((r) => [r.id, r.status ?? "", r.time ?? ""])
+  );
+  const prevSignature = useRef(rowsSignature);
+  useEffect(() => {
+    if (prevSignature.current === rowsSignature) return;
+    prevSignature.current = rowsSignature;
+    setState((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      for (const r of initialRows) {
+        if (touchedRef.current.has(r.id)) continue;
+        const serverStatus = r.status ?? null;
+        if ((next[r.id] ?? null) !== serverStatus) {
+          next[r.id] = serverStatus;
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [rowsSignature, initialRows]);
 
   const counts = useMemo(() => {
     const c: Record<AttendanceStatus, number> & { belum: number } = {
@@ -123,13 +157,18 @@ export default function AttendanceForm({
 
   function markAllHadir() {
     const map: Record<string, AttendanceStatus | null> = {};
-    for (const r of initialRows) map[r.id] = "hadir";
+    for (const r of initialRows) {
+      map[r.id] = "hadir";
+      touchedRef.current.add(r.id);
+    }
     setState(map);
   }
 
   function resetMarks() {
     const map: Record<string, AttendanceStatus | null> = {};
     for (const r of initialRows) map[r.id] = r.status ?? null;
+    // Kembali sama dengan data tersimpan → boleh ikut live-update lagi.
+    touchedRef.current.clear();
     setState(map);
   }
 
@@ -157,9 +196,10 @@ export default function AttendanceForm({
         <button
           type="button"
           onClick={resetMarks}
+          title="Kembalikan ke data tersimpan"
           className="inline-flex min-h-[48px] items-center rounded-lg border px-4 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted"
         >
-          Ulangi
+          Reset
         </button>
         <div className="flex flex-wrap gap-2 text-sm font-semibold" role="status" aria-label="Rekap absensi">
           <span className="rounded-full bg-emerald-100 px-3 py-1 text-emerald-800">
@@ -183,6 +223,10 @@ export default function AttendanceForm({
             </span>
           )}
         </div>
+        <p className="text-xs text-muted-foreground">
+          Daftar memantau otomatis: absensi QR yang baru masuk langsung tampil tanpa
+          menekan apa pun. Tanda yang sudah Anda ketuk tidak akan tertimpa.
+        </p>
       </div>
 
       <ol className="grid gap-3 lg:grid-cols-2">
@@ -228,12 +272,13 @@ export default function AttendanceForm({
                     type="button"
                     aria-pressed={current === s}
                     aria-label={`${ATTENDANCE_LABELS[s]} — ${row.full_name}`}
-                    onClick={() =>
+                    onClick={() => {
+                      touchedRef.current.add(row.id);
                       setState((prev) => ({
                         ...prev,
                         [row.id]: prev[row.id] === s ? null : s,
-                      }))
-                    }
+                      }));
+                    }}
                     className={cn(
                       "flex min-h-[56px] flex-col items-center justify-center rounded-lg border-2 transition-colors",
                       current === s ? STATUS_STYLES[s].on : STATUS_STYLES[s].off

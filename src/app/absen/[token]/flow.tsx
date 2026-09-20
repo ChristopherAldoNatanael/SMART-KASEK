@@ -224,7 +224,7 @@ export default function PublicAttendanceFlow({
         <div className="space-y-4">
           {candidate.alreadyCheckedIn ? (
             <div className="rounded-xl border bg-muted/40 p-4 text-center">
-              <p className="font-bold">Kamu sudah absen.</p>
+              <p className="font-bold">Kamu sudah absen pada sesi ini.</p>
               <p className="tnum mt-1 text-sm text-muted-foreground">
                 {candidate.checkedInAt ? formatTimeID(candidate.checkedInAt) : ""} WIB
                 {candidate.checkedStatus ? ` • ${candidate.checkedStatus}` : ""}
@@ -277,7 +277,7 @@ export default function PublicAttendanceFlow({
         <div className="space-y-3 text-center">
           <BadgeCheck className="mx-auto h-12 w-12 text-emerald-600" aria-hidden />
           <p className="text-lg font-bold">
-            {result.already ? "Sudah tercatat" : "Absensi berhasil"}
+            {result.already ? "Absensimu sudah tercatat" : "Absensi berhasil"}
           </p>
           <p className="font-semibold">{result.fullName}</p>
           <p className="tnum text-sm text-muted-foreground">

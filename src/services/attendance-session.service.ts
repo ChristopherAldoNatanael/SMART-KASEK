@@ -266,7 +266,7 @@ function serviceClient() {
     return createServiceClient();
   } catch (error) {
     console.error("QR attendance config error:", error);
-    throw new Error("Layanan absensi sedang gangguan. Silakan hubungi guru.");
+    throw new Error("Layanan absensi sedang gangguan. Coba lagi beberapa saat, atau hubungi guru.");
   }
 }
 
@@ -472,7 +472,7 @@ export async function confirmAttendanceForSession(input: {
         already: true,
       };
     }
-    throw new Error("Absensi belum berhasil disimpan. Silakan coba lagi.");
+    throw new Error("Absensimu belum tercatat karena gangguan sistem. Coba tekan lagi, atau hubungi guru.");
   }
 
   return { fullName: st.full_name, status, checkedInAt: now.toISOString(), already: false };

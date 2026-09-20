@@ -58,7 +58,11 @@ export async function previewStudentAction(input: {
     return { ok: true, step: "verify", ...candidate };
   } catch (error) {
     // Pesan error service sudah user-safe (tanpa stack trace / detail DB).
-    return fail(error instanceof Error ? error.message : "Absensi belum berhasil diproses. Silakan coba lagi.");
+    return fail(
+      error instanceof Error
+        ? error.message
+        : "Absensimu belum tercatat karena gangguan sistem. Coba scan ulang QR, atau hubungi guru."
+    );
   }
 }
 
@@ -76,6 +80,10 @@ export async function confirmAttendanceAction(input: {
     const result = await confirmAttendanceForSession(parsed.data);
     return { ok: true, step: "done", ...result };
   } catch (error) {
-    return fail(error instanceof Error ? error.message : "Absensi belum berhasil disimpan. Silakan coba lagi.");
+    return fail(
+      error instanceof Error
+        ? error.message
+        : "Absensimu belum tercatat karena gangguan sistem. Tetap di halaman ini dan coba lagi, atau hubungi guru."
+    );
   }
 }
