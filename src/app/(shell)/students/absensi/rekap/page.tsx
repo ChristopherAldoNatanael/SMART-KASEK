@@ -21,6 +21,7 @@ import {
 } from "@/lib/students";
 import { getActiveSchoolClassNames } from "@/services/school-class.service";
 import { Badge, Empty, PageHeader, Panel } from "@/components/common";
+import { ExportRecapExcelButton } from "@/components/students/attendance-export";
 import MyClasses from "@/components/students/my-classes";
 import RecapFilterBar from "@/components/students/recap-filter-bar";
 
@@ -143,6 +144,25 @@ export default async function AttendanceRecapPage({
         eyebrow="Kesiswaan • Rekap Absensi"
         title={`Rekap ${monthLabel}`}
         description="Ringkasan kehadiran per bulan: berapa yang hadir, siapa yang izin, sakit, atau alpa."
+        actions={
+          single ? (
+            <ExportRecapExcelButton
+              className={single.className}
+              month={month}
+              monthLabel={monthLabel}
+              rows={single.rows.map((r) => ({
+                nama: r.full_name,
+                nis: r.student_number,
+                hadir: r.hadir,
+                terlambat: r.terlambat,
+                izin: r.izin,
+                sakit: r.sakit,
+                alpa: r.alpa,
+                percent: r.percent,
+              }))}
+            />
+          ) : undefined
+        }
       />
 
       <RecapFilterBar

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { QrCode } from "lucide-react";
 import QRCode from "qrcode";
 import {
+  getSessionCheckins,
   getSessionLiveStats,
   listSessionsForClass,
 } from "@/services/attendance-session.service";
@@ -36,12 +37,17 @@ export default async function AttendanceSessionPanel({
   const open = sessions.find((s) => s.status === "open") ?? null;
 
   let stats: { total: number; hadir: number; terlambat: number; belum: number } | null = null;
+  let checkins: Awaited<ReturnType<typeof getSessionCheckins>> = [];
   let qrDataUrl: string | null = null;
   if (open) {
     try {
-      stats = await getSessionLiveStats(open.id);
+      [stats, checkins] = await Promise.all([
+        getSessionLiveStats(open.id),
+        getSessionCheckins(open.id),
+      ]);
     } catch {
       stats = null;
+      checkins = [];
     }
     try {
       qrDataUrl = await QRCode.toDataURL(`${siteUrl()}/absen/${open.qr_token}`, {
@@ -59,7 +65,7 @@ export default async function AttendanceSessionPanel({
       title="QR Absensi Digital"
       description={
         open
-          ? `Sesi "${open.label}" terbuka. Siswa scan QR → isi nama + NIS → konfirmasi. Satu HP boleh bergantian, tiap siswa 1 absensi, siswa berikutnya scan ulang.`
+          ? `Sesi "${open.label}" terbuka. Siswa scan QR → ketuk nama → konfirmasi. Satu HP boleh bergantian, tiap siswa 1 absensi, siswa berikutnya scan ulang.`
           : "Belum ada sesi QR terbuka hari ini. Buka sesi agar siswa bisa absen lewat scan tanpa login."
       }
     >
@@ -109,6 +115,38 @@ export default async function AttendanceSessionPanel({
               Waktu kehadiran dicatat dari server. Lewat batas = Terlambat otomatis. Data langsung masuk daftar
               hadir dan rekap di bawah.
             </p>
+            {checkins.length > 0 && (
+              <div>
+                <p className="text-sm font-bold">Sudah absen ({checkins.length})</p>
+                <ol className="mt-2 max-h-56 space-y-1.5 overflow-auto rounded-lg border bg-muted/30 p-2.5">
+                  {checkins.map((c, i) => (
+                    <li
+                      key={`${c.fullName}-${i}`}
+                      className="flex items-center justify-between gap-2 rounded-md bg-card px-3 py-1.5 text-sm"
+                    >
+                      <span className="min-w-0 truncate font-semibold">
+                        <span className="mr-1.5 text-muted-foreground">{i + 1}.</span>
+                        {c.fullName}
+                      </span>
+                      <span className="flex shrink-0 items-center gap-1.5">
+                        <span
+                          className={
+                            c.status === "terlambat"
+                              ? "rounded-full bg-orange-100 px-2 py-0.5 text-xs font-bold text-orange-800"
+                              : "rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-bold text-emerald-800"
+                          }
+                        >
+                          {c.status === "terlambat" ? "T" : "H"}
+                        </span>
+                        <span className="tnum text-xs font-bold text-sky-800" title="Jam scan (waktu server)">
+                          {c.time ?? "—"}
+                        </span>
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
             <div className="flex flex-wrap gap-2">
               <CloseSessionButton sessionId={open.id} />
               <Link

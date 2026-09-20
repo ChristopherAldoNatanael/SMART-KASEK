@@ -78,6 +78,20 @@ export const ATTENDANCE_SHORT: Record<AttendanceStatus, string> = {
 /** Status yang dihitung sebagai kehadiran (untuk persen rekap). */
 export const PRESENT_STATUSES: AttendanceStatus[] = ["hadir", "terlambat"];
 
+/**
+ * ISO timestamptz → "HH:mm" WIB. Hitung manual (tanpa ICU) agar konsisten
+ * di server maupun browser. Null/invalid → null.
+ */
+export function formatWibHM(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return null;
+  const d = new Date(t + 7 * 60 * 60 * 1000);
+  const hh = String(d.getUTCHours()).padStart(2, "0");
+  const mm = String(d.getUTCMinutes()).padStart(2, "0");
+  return `${hh}:${mm}`;
+}
+
 /** Tanggal hari ini format YYYY-MM-DD (default pilihan tanggal absensi). */
 export function todayISO(now: Date = new Date()): string {
   const y = now.getFullYear();

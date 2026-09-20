@@ -18,6 +18,8 @@ export type AttendanceInitialRow = {
   full_name: string;
   student_number: string | null;
   status: AttendanceStatus | null;
+  /** Jam tercatat "HH:mm" WIB. Null = belum ada record tersimpan. */
+  time: string | null;
 };
 
 const STATUS_STYLES: Record<AttendanceStatus, { on: string; off: string }> = {
@@ -199,6 +201,14 @@ export default function AttendanceForm({
                 {row.student_number && (
                   <span className="tnum ml-2 text-sm font-normal text-muted-foreground">
                     {row.student_number}
+                  </span>
+                )}
+                {row.time && (
+                  <span
+                    title="Jam tercatat (waktu server)"
+                    className="tnum ml-2 rounded-full bg-sky-100 px-2 py-0.5 text-xs font-bold text-sky-800"
+                  >
+                    {row.time}
                   </span>
                 )}
               </p>

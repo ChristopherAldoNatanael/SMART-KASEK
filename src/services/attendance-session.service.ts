@@ -4,7 +4,7 @@ import { randomBytes } from "crypto";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getCurrentUser } from "@/lib/auth";
-import { allowedClassesFor, todayISO } from "@/lib/students";
+import { allowedClassesFor, formatWibHM, todayISO } from "@/lib/students";
 import { getTeacherClassAccess } from "./teaching-assignment.service";
 import type { Database } from "@/types/database";
 
@@ -201,6 +201,45 @@ export async function getSessionLiveStats(sessionId: string): Promise<{
   const terlambat = rows.filter((r) => r.status === "terlambat").length;
   const total = studentCount ?? rows.length;
   return { total, hadir, terlambat, belum: Math.max(0, total - hadir - terlambat) };
+}
+
+export type SessionCheckin = {
+  fullName: string;
+  status: string;
+  /** Jam "HH:mm" WIB (checked_in_at QR, fallback created_at). */
+  time: string | null;
+};
+
+/** Daftar anak yang sudah absen di sesi ini + jamnya (untuk panel guru). */
+export async function getSessionCheckins(sessionId: string): Promise<SessionCheckin[]> {
+  const user = await requireSessionAccess();
+  const supabase = await createClient();
+  const { data: session, error: sError } = await supabase
+    .from("attendance_sessions")
+    .select("id, school_id")
+    .eq("id", sessionId)
+    .single();
+  if (sError || !session) throw new Error("Sesi tidak ditemukan");
+  if ((session as { school_id: string }).school_id !== user.schoolId) {
+    throw new Error("Anda tidak memiliki akses ke sesi ini");
+  }
+
+  const { data: records, error: rError } = await supabase
+    .from("class_attendance")
+    .select("status, checked_in_at, created_at, students(full_name)")
+    .eq("session_id", sessionId)
+    .order("checked_in_at", { ascending: true, nullsFirst: false });
+  if (rError) throw new Error(rError.message);
+  return ((records ?? []) as {
+    status: string;
+    checked_in_at: string | null;
+    created_at: string;
+    students: { full_name: string }[] | null;
+  }[]).map((r) => ({
+    fullName: r.students?.[0]?.full_name ?? "—",
+    status: r.status,
+    time: formatWibHM(r.checked_in_at ?? r.created_at),
+  }));
 }
 
 /* ------------------------- Publik: tanpa login ------------------------- */

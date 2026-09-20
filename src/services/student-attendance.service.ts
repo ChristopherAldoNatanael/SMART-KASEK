@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import {
   currentAcademicYear,
+  formatWibHM,
   monthRange,
   schoolYearForMonth,
   type AttendanceStatus,
@@ -18,6 +19,8 @@ export type AttendanceSheetRow = {
   full_name: string;
   student_number: string | null;
   status: AttendanceStatus | null;
+  /** Jam tercatat "HH:mm" WIB (checked_in_at QR, fallback created_at). Null = belum ada record. */
+  time: string | null;
 };
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -77,24 +80,36 @@ export async function getAttendanceSheet(input: {
 
   const { data: records, error: rError } = await supabase
     .from("class_attendance")
-    .select("student_id, status")
+    .select("student_id, status, checked_in_at, created_at")
     .eq("school_id", schoolId)
     .eq("date", input.date);
   if (rError) throw new Error(rError.message);
 
   const byStudent = new Map(
-    ((records ?? []) as Pick<Attendance, "student_id" | "status">[]).map((r) => [
+    (
+      (records ?? []) as Pick<
+        Attendance,
+        "student_id" | "status" | "checked_in_at" | "created_at"
+      >[]
+    ).map((r) => [
       r.student_id,
-      r.status as AttendanceStatus,
+      {
+        status: r.status as AttendanceStatus,
+        time: formatWibHM(r.checked_in_at ?? r.created_at),
+      },
     ])
   );
 
-  const rows = members.map((s) => ({
-    id: s.id,
-    full_name: s.full_name,
-    student_number: s.student_number,
-    status: byStudent.get(s.id) ?? null,
-  }));
+  const rows = members.map((s) => {
+    const rec = byStudent.get(s.id) ?? null;
+    return {
+      id: s.id,
+      full_name: s.full_name,
+      student_number: s.student_number,
+      status: rec?.status ?? null,
+      time: rec?.time ?? null,
+    };
+  });
 
   return { rows, filled: rows.filter((r) => r.status !== null).length };
 }

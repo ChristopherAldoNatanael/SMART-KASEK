@@ -5,6 +5,7 @@ import { getTeacherClassAccess } from "@/services/teaching-assignment.service";
 import { allowedClassesFor, currentAcademicYear, todayISO } from "@/lib/students";
 import { Empty, PageHeader, Panel } from "@/components/common";
 import AttendanceDateNav from "@/components/students/attendance-date-nav";
+import { ExportDailyExcelButton } from "@/components/students/attendance-export";
 import AttendanceForm from "@/components/students/attendance-form";
 import AttendanceSessionPanel from "@/components/students/attendance-session-panel";
 
@@ -102,12 +103,25 @@ export default async function AttendancePage({
         title={`Kelas ${className}`}
         description={`Tahun ajaran ${academicYear}. Ketuk H / T / I / S / A untuk tiap anak, lalu tekan Simpan absensi. Yang belum diketuk = Belum Absen (bukan Hadir). Menyimpan ulang tanggal yang sama berarti mengoreksi.`}
         actions={
-          <Link
-            href={`/students/absensi/rekap?bulan=${date.slice(0, 7)}&kelas=${encodeURIComponent(className)}`}
-            className="inline-flex min-h-[48px] items-center rounded-lg border-2 px-4 py-2.5 text-[15px] font-semibold transition-colors hover:bg-muted"
-          >
-            Rekap bulan ini
-          </Link>
+          <>
+            <ExportDailyExcelButton
+              className={className}
+              date={date}
+              dateLabel={dateLabel}
+              rows={sheet.rows.map((r) => ({
+                nama: r.full_name,
+                nis: r.student_number,
+                status: r.status,
+                jam: r.time,
+              }))}
+            />
+            <Link
+              href={`/students/absensi/rekap?bulan=${date.slice(0, 7)}&kelas=${encodeURIComponent(className)}`}
+              className="inline-flex min-h-[48px] items-center rounded-lg border-2 px-4 py-2.5 text-[15px] font-semibold transition-colors hover:bg-muted"
+            >
+              Rekap bulan ini
+            </Link>
+          </>
         }
       />
 
