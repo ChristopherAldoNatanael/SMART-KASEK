@@ -78,7 +78,9 @@ export async function createAttendanceSession(input: {
   if (input.lateAfter && !TIME_RE.test(input.lateAfter)) throw new Error("Batas harus HH:mm");
   if (input.endsAt && !TIME_RE.test(input.endsAt)) throw new Error("Berakhir harus HH:mm");
   if (input.lateAfter && input.endsAt && input.endsAt <= input.lateAfter) {
-    throw new Error("Jam berakhir harus setelah batas tepat waktu");
+    throw new Error(
+      `Jam berakhir (${input.endsAt}) harus setelah batas tepat waktu (${input.lateAfter}) di hari yang sama. Pakai format 24 jam — mis. 13:15 untuk jam 1 siang, bukan 01:15.`
+    );
   }
 
   // Guru hanya boleh membuka sesi kelasnya sendiri.

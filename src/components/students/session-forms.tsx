@@ -54,22 +54,32 @@ export function CreateSessionForm({
         Batas tepat waktu (opsional)
         <input
           name="lateAfter"
-          type="time"
+          type="text"
+          inputMode="numeric"
+          placeholder="07:15"
+          maxLength={5}
+          autoComplete="off"
           className="min-h-[48px] rounded-lg border bg-background px-3 text-[15px]"
         />
         <span className="text-xs font-normal text-muted-foreground">
-          Lewat jam ini = Terlambat (waktu server).
+          Format 24 jam, 00:00–23:59. Boleh pakai titik (07.15) atau titik dua
+          (07:15). Lewat jam ini = Terlambat (waktu server).
         </span>
       </label>
       <label className="grid gap-1 text-sm font-medium">
         Sesi berakhir (opsional)
         <input
           name="endsAt"
-          type="time"
+          type="text"
+          inputMode="numeric"
+          placeholder="07:30"
+          maxLength={5}
+          autoComplete="off"
           className="min-h-[48px] rounded-lg border bg-background px-3 text-[15px]"
         />
         <span className="text-xs font-normal text-muted-foreground">
-          Lewat jam ini QR otomatis kedaluwarsa.
+          Cth. 13.15 untuk jam 1 siang. Harus setelah batas tepat waktu. Lewat
+          jam ini QR otomatis kedaluwarsa.
         </span>
       </label>
       <div className="sm:col-span-2">

@@ -4,6 +4,32 @@ import { academicYearSchema } from "./students";
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
+/**
+ * Normalisasi jam gaya Indonesia: "07.15" / "07:15" / "7:15" / "0715"
+ * → "07:15" (24 jam). Kosong → undefined (opsional).
+ */
+function normalizeClockInput(v: unknown): string | undefined {
+  if (typeof v !== "string") return undefined;
+  let s = v.trim().replace(/\s+/g, "");
+  if (s === "") return undefined;
+  s = s.replace(".", ":");
+  if (/^\d{3,4}$/.test(s)) {
+    s = s.padStart(4, "0");
+    return `${s.slice(0, 2)}:${s.slice(2)}`;
+  }
+  const m = s.match(/^(\d{1,2}):(\d{2})$/);
+  if (m) return `${m[1].padStart(2, "0")}:${m[2]}`;
+  return s;
+}
+
+const clockSchema = z.preprocess(
+  normalizeClockInput,
+  z
+    .string()
+    .regex(TIME_RE, "Jam harus format 24 jam, cth. 07:15 atau 07.15")
+    .optional()
+);
+
 export const createAttendanceSessionSchema = z.object({
   academicYear: academicYearSchema,
   className: z.string().trim().min(1, "Kelas tidak valid").max(50),
@@ -14,20 +40,10 @@ export const createAttendanceSessionSchema = z.object({
     .max(80)
     .optional()
     .transform((v) => (v && v.length > 0 ? v : "Absensi Pagi")),
-  /** Batas tepat waktu HH:mm (opsional). Lewat batas = Terlambat. */
-  lateAfter: z
-    .string()
-    .trim()
-    .regex(TIME_RE, "Batas harus HH:mm")
-    .optional()
-    .or(z.literal("").transform(() => undefined)),
-  /** Batas akhir sesi HH:mm (opsional). */
-  endsAt: z
-    .string()
-    .trim()
-    .regex(TIME_RE, "Berakhir harus HH:mm")
-    .optional()
-    .or(z.literal("").transform(() => undefined)),
+  /** Batas tepat waktu 24 jam (opsional). Lewat batas = Terlambat. */
+  lateAfter: clockSchema,
+  /** Batas akhir sesi 24 jam (opsional). */
+  endsAt: clockSchema,
 });
 
 export type CreateAttendanceSessionInput = z.infer<
