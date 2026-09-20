@@ -207,8 +207,21 @@ export async function getSessionLiveStats(sessionId: string): Promise<{
 /* Semua fungsi publik memakai service-role dengan validasi token eksplisit.
    Tidak ada daftar siswa yang dibocorkan — hanya kandidat yang cocok. */
 
+/**
+ * Service-role untuk public flow. Error konfigurasi dicatat di server
+ * dan diganti pesan user-safe — siswa tidak boleh melihat detail teknis.
+ */
+function serviceClient() {
+  try {
+    return createServiceClient();
+  } catch (error) {
+    console.error("QR attendance config error:", error);
+    throw new Error("Layanan absensi sedang gangguan. Silakan hubungi guru.");
+  }
+}
+
 async function loadSessionByToken(token: string): Promise<Session> {
-  const service = createServiceClient();
+  const service = serviceClient();
   const { data, error } = await service
     .from("attendance_sessions")
     .select("*")
@@ -251,7 +264,7 @@ export async function lookupStudentForSession(input: {
   const code = input.studentCode.trim();
   if (name.length < 2 || code.length < 2) throw new Error("Periksa kembali identitas Anda.");
 
-  const service = createServiceClient();
+  const service = serviceClient();
   // Ambil roster kelas (kolom minimal), cocokkan di server.
   const { data: roster, error } = await service
     .from("students")
@@ -308,7 +321,7 @@ export async function confirmAttendanceForSession(input: {
   if (isExpired(session, now)) {
     throw new Error("Sesi absensi sudah ditutup atau kedaluwarsa. Silakan hubungi guru jika ada kesalahan.");
   }
-  const service = createServiceClient();
+  const service = serviceClient();
   const { data: student, error: sError } = await service
     .from("students")
     .select("id, full_name, student_number, no_induk")
