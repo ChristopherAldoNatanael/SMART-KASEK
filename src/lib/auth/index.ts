@@ -40,6 +40,21 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
       return null;
     }
 
+    // Foto default = foto Google (dari user_metadata), BUKAN generated.
+    // profiles.avatar_url hanya untuk unggahan custom dan menimpa default.
+    const metadata = user.user_metadata as Record<string, unknown> | null;
+    const googlePhoto =
+      typeof metadata?.avatar_url === "string" &&
+      (metadata.avatar_url as string).startsWith("http")
+        ? (metadata.avatar_url as string)
+        : typeof metadata?.picture === "string" &&
+            (metadata.picture as string).startsWith("http")
+          ? (metadata.picture as string)
+          : null;
+    const customAvatar = (
+      (profile.avatar_url as string | null) ?? ""
+    ).trim();
+
     return {
       id: profile.id,
       email: user.email ?? "",
@@ -47,7 +62,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
       schoolId: profile.school_id,
       fullName: profile.full_name,
       isActive: profile.is_active,
-      avatarUrl: (profile.avatar_url as string | null) ?? null,
+      avatarUrl: customAvatar || googlePhoto,
     };
   } catch (error) {
     console.error("getCurrentUser error:", error);

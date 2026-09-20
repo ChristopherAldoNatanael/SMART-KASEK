@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { syncGoogleAvatarIfEmpty } from "@/services/profile.service";
 
 /**
  * OAuth callback (Google, dll).
@@ -43,8 +42,6 @@ export async function GET(request: Request) {
     const supabase = await createClient();
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
-      // Foto Google langsung tampil di top nav tanpa upload manual.
-      await syncGoogleAvatarIfEmpty();
       let dest = "/onboarding";
       try {
         const userId = data.user?.id ?? data.session?.user?.id;

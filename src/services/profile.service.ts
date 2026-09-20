@@ -121,7 +121,13 @@ export async function getMyAccount(): Promise<MyAccount | null> {
   const googleAvatarUrl = googlePhotoFromMetadata(
     authUser?.user_metadata as Record<string, unknown> | null
   );
-  const avatarUrl = row.avatar_url?.trim() || googleAvatarUrl;
+  const customAvatar = row.avatar_url?.trim() || null;
+  // Baris lama yang pernah disinkronisasi foto Google ke avatar_url
+  // dianggap TIDAK custom — default tetap foto Google.
+  const hasCustomAvatar = Boolean(
+    customAvatar && customAvatar !== googleAvatarUrl
+  );
+  const avatarUrl = customAvatar || googleAvatarUrl;
   return {
     fullName: row.full_name,
     email: row.email || user.email,
@@ -132,7 +138,7 @@ export async function getMyAccount(): Promise<MyAccount | null> {
     loginWith,
     avatarUrl,
     googleAvatarUrl,
-    hasCustomAvatar: Boolean(row.avatar_url?.trim()),
+    hasCustomAvatar,
   };
 }
 
@@ -263,39 +269,6 @@ export async function removeMyAvatar(): Promise<void> {
     .update({ avatar_url: null })
     .eq("id", user.id);
   if (error) throw new Error(error.message);
-}
-
-/**
- * Sinkronisasi senyap foto Google saat OAuth callback: bila profil
- * belum punya avatar custom, simpan foto Google agar top nav
- * langsung menampilkan foto tanpa perlu upload manual.
- * Best-effort — kegagalan tidak menggagalkan login.
- */
-export async function syncGoogleAvatarIfEmpty(): Promise<void> {
-  try {
-    const supabase = await createClient();
-    const {
-      data: { user: authUser },
-    } = await supabase.auth.getUser();
-    if (!authUser) return;
-    const googleUrl = googlePhotoFromMetadata(
-      authUser.user_metadata as Record<string, unknown> | null
-    );
-    if (!googleUrl) return;
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("id, avatar_url")
-      .eq("auth_user_id", authUser.id)
-      .single();
-    const row = profile as { id: string; avatar_url: string | null } | null;
-    if (!row || row.avatar_url?.trim()) return;
-    await supabase
-      .from("profiles")
-      .update({ avatar_url: googleUrl })
-      .eq("id", row.id);
-  } catch (error) {
-    console.error("syncGoogleAvatarIfEmpty warning:", error);
-  }
 }
 
 /**
