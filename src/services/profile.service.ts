@@ -59,7 +59,23 @@ export type MyAccount = {
   joinedAt: string;
   /** Cara masuk: google (tanpa kata sandi) atau email (pakai kata sandi). */
   loginWith: "google" | "email";
+  /** Foto tampil: avatar custom bila ada, jika tidak foto Google. */
+  avatarUrl: string | null;
+  /** Foto dari Google (null bila login email / Google tanpa foto). */
+  googleAvatarUrl: string | null;
+  /** True bila foto tampil berasal dari unggahan sendiri. */
+  hasCustomAvatar: boolean;
 };
+
+/** Ambil URL foto Google dari metadata auth (avatar_url / picture). */
+function googlePhotoFromMetadata(
+  metadata: Record<string, unknown> | null | undefined
+): string | null {
+  if (!metadata) return null;
+  const raw =
+    metadata.avatar_url ?? metadata.picture ?? metadata.profile_image;
+  return typeof raw === "string" && raw.startsWith("http") ? raw : null;
+}
 
 /**
  * Data "Akun Saya" untuk semua peran: nama, email, peran, sekolah.
@@ -72,7 +88,7 @@ export async function getMyAccount(): Promise<MyAccount | null> {
   // user.id = ID baris profiles (lihat lib/auth) — bukan auth_user_id.
   const { data: profile, error } = await supabase
     .from("profiles")
-    .select("full_name, email, role, is_active, created_at, school_id")
+    .select("full_name, email, role, is_active, created_at, school_id, avatar_url")
     .eq("id", user.id)
     .single();
   if (error || !profile) return null;
@@ -83,6 +99,7 @@ export async function getMyAccount(): Promise<MyAccount | null> {
     is_active: boolean;
     created_at: string;
     school_id: string | null;
+    avatar_url: string | null;
   };
   let schoolName: string | null = null;
   if (row.school_id) {
@@ -101,6 +118,10 @@ export async function getMyAccount(): Promise<MyAccount | null> {
     "google"
       ? "google"
       : "email";
+  const googleAvatarUrl = googlePhotoFromMetadata(
+    authUser?.user_metadata as Record<string, unknown> | null
+  );
+  const avatarUrl = row.avatar_url?.trim() || googleAvatarUrl;
   return {
     fullName: row.full_name,
     email: row.email || user.email,
@@ -109,6 +130,9 @@ export async function getMyAccount(): Promise<MyAccount | null> {
     isActive: row.is_active,
     joinedAt: row.created_at,
     loginWith,
+    avatarUrl,
+    googleAvatarUrl,
+    hasCustomAvatar: Boolean(row.avatar_url?.trim()),
   };
 }
 
@@ -169,6 +193,109 @@ export async function updateMyPassword(password: string): Promise<void> {
   }
   const { error } = await supabase.auth.updateUser({ password });
   if (error) throw new Error(error.message);
+}
+
+function avatarExtension(mime: string): string {
+  if (mime === "image/jpeg") return "jpg";
+  if (mime === "image/webp") return "webp";
+  return "png";
+}
+
+/**
+ * Unggah foto profil custom ke bucket `avatars` lalu simpan public URL
+ * ke profiles.avatar_url milik sendiri.
+ */
+export async function uploadMyAvatar(file: File): Promise<string> {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("Sesi berakhir. Silakan login kembali.");
+  const supabase = await createClient();
+  const {
+    data: { user: authUser },
+  } = await supabase.auth.getUser();
+  if (!authUser) throw new Error("Sesi berakhir. Silakan login kembali.");
+
+  const path = `${authUser.id}/avatar-${Date.now()}.${avatarExtension(file.type)}`;
+  const { error: uploadError } = await supabase.storage
+    .from("avatars")
+    .upload(path, file, { contentType: file.type, upsert: true });
+  if (uploadError) throw new Error(uploadError.message);
+
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+  const url = `${base.replace(/\/$/, "")}/storage/v1/object/public/avatars/${path}`;
+  const { error } = await supabase
+    .from("profiles")
+    .update({ avatar_url: url })
+    .eq("id", user.id);
+  if (error) throw new Error(error.message);
+  return url;
+}
+
+/**
+ * Pakai foto Google sebagai foto profil (kosongkan avatar custom
+ * sehingga tampilan jatuh ke foto Google).
+ */
+export async function applyGoogleAvatar(): Promise<void> {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("Sesi berakhir. Silakan login kembali.");
+  const supabase = await createClient();
+  const {
+    data: { user: authUser },
+  } = await supabase.auth.getUser();
+  const googleUrl = googlePhotoFromMetadata(
+    authUser?.user_metadata as Record<string, unknown> | null
+  );
+  if (!googleUrl)
+    throw new Error("Akun ini tidak memiliki foto Google yang bisa dipakai.");
+  const { error } = await supabase
+    .from("profiles")
+    .update({ avatar_url: null })
+    .eq("id", user.id);
+  if (error) throw new Error(error.message);
+}
+
+/** Hapus foto profil custom (tampilan kembali ke inisial / foto Google). */
+export async function removeMyAvatar(): Promise<void> {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("Sesi berakhir. Silakan login kembali.");
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("profiles")
+    .update({ avatar_url: null })
+    .eq("id", user.id);
+  if (error) throw new Error(error.message);
+}
+
+/**
+ * Sinkronisasi senyap foto Google saat OAuth callback: bila profil
+ * belum punya avatar custom, simpan foto Google agar top nav
+ * langsung menampilkan foto tanpa perlu upload manual.
+ * Best-effort — kegagalan tidak menggagalkan login.
+ */
+export async function syncGoogleAvatarIfEmpty(): Promise<void> {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user: authUser },
+    } = await supabase.auth.getUser();
+    if (!authUser) return;
+    const googleUrl = googlePhotoFromMetadata(
+      authUser.user_metadata as Record<string, unknown> | null
+    );
+    if (!googleUrl) return;
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("id, avatar_url")
+      .eq("auth_user_id", authUser.id)
+      .single();
+    const row = profile as { id: string; avatar_url: string | null } | null;
+    if (!row || row.avatar_url?.trim()) return;
+    await supabase
+      .from("profiles")
+      .update({ avatar_url: googleUrl })
+      .eq("id", row.id);
+  } catch (error) {
+    console.error("syncGoogleAvatarIfEmpty warning:", error);
+  }
 }
 
 /**

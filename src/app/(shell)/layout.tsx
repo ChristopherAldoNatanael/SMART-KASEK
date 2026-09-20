@@ -53,6 +53,7 @@ export default async function ShellLayout({
       role={role}
       roleLabel={roleLabel}
       fullName={fullName}
+      avatarUrl={user.avatarUrl}
       school={school}
     >
       {children}

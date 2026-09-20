@@ -150,6 +150,22 @@ export async function ensureProfile(
   return data as Profile;
 }
 
+/**
+ * Ganti peran saat onboarding (profil belum terhubung ke sekolah).
+ * RPC menolak bila sudah terhubung (ALREADY_LINKED) — peran yang
+ * sudah bersekolah tidak bisa diubah dari sini.
+ */
+export async function switchProfileRole(
+  role: "principal" | "teacher"
+): Promise<Profile> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("switch_profile_role", {
+    p_role: role,
+  });
+  if (error) throw new Error(rpcErrorMessage(error));
+  return data as Profile;
+}
+
 export async function createSchool(input: {
   name: string;
   npsn?: string;

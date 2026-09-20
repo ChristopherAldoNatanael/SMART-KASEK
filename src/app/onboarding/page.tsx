@@ -6,6 +6,7 @@ import {
   CreateSchoolForm,
   JoinSchoolForm,
   RolePickerForm,
+  SwitchRolePanel,
 } from "@/components/onboarding/onboarding-forms";
 
 export const dynamic = "force-dynamic";
@@ -88,6 +89,9 @@ export default async function OnboardingPage() {
         description="Tambahkan informasi sekolah untuk mulai mengelola guru dan pembelajaran."
       >
         <CreateSchoolForm />
+        {state.role === "principal" && (
+          <SwitchRolePanel currentRole="principal" />
+        )}
       </Shell>
     );
   }
@@ -98,6 +102,7 @@ export default async function OnboardingPage() {
       description="Untuk mulai menggunakan SMART KASEK, bergabunglah ke sekolah Anda menggunakan kode undangan yang diberikan oleh Kepala Sekolah."
     >
       <JoinSchoolForm />
+      <SwitchRolePanel currentRole="teacher" />
     </Shell>
   );
 }

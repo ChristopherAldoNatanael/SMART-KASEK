@@ -9,9 +9,12 @@ import {
   uploadSchoolLogo,
 } from "@/services/school.service";
 import {
+  removeMyAvatar,
   updateMyAccountEmail,
   updateMyAccountName,
   updateMyPassword,
+  uploadMyAvatar,
+  applyGoogleAvatar,
 } from "@/services/profile.service";
 import { logAuditEvent } from "@/services/audit.service";
 import {
@@ -20,6 +23,10 @@ import {
   MAX_LOGO_BYTES,
   updateSchoolSchema,
 } from "@/schemas/school-settings";
+import {
+  ALLOWED_AVATAR_TYPES,
+  MAX_AVATAR_BYTES,
+} from "@/schemas/account";
 import {
   firstAccountIssueMessage,
   updateAccountEmailSchema,
@@ -255,4 +262,85 @@ export async function uploadLogoAction(
       error: error instanceof Error ? error.message : "Gagal mengunggah logo",
     };
   }
+}
+
+/** Unggah foto profil sendiri (PNG/JPG/WebP, maks 2 MB, semua peran). */
+export async function uploadAvatarAction(
+  _prev: SettingsActionState,
+  formData: FormData
+): Promise<SettingsActionState> {
+  const blocked = await requireAccountAccess();
+  if (blocked) return { ok: false, error: blocked };
+
+  const file = formData.get("avatar");
+  if (!(file instanceof File) || file.size === 0) {
+    return { ok: false, error: "Pilih berkas foto terlebih dahulu." };
+  }
+  if (
+    !ALLOWED_AVATAR_TYPES.includes(
+      file.type as (typeof ALLOWED_AVATAR_TYPES)[number]
+    )
+  ) {
+    return { ok: false, error: "Format foto harus PNG, JPG, atau WebP." };
+  }
+  if (file.size > MAX_AVATAR_BYTES) {
+    return { ok: false, error: "Ukuran foto maksimal 2 MB." };
+  }
+
+  try {
+    await uploadMyAvatar(file);
+    await logAuditEvent({ action: "update", entity: "profiles", newData: {} });
+  } catch (error) {
+    console.error("uploadAvatarAction error:", error);
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Gagal mengunggah foto",
+    };
+  }
+
+  revalidateSettings();
+  return { ok: true, error: null };
+}
+
+/** Kembali memakai foto Google (menghapus foto custom). */
+export async function useGoogleAvatarAction(
+  _prev: SettingsActionState
+): Promise<SettingsActionState> {
+  const blocked = await requireAccountAccess();
+  if (blocked) return { ok: false, error: blocked };
+
+  try {
+    await applyGoogleAvatar();
+  } catch (error) {
+    console.error("useGoogleAvatarAction error:", error);
+    return {
+      ok: false,
+      error:
+        error instanceof Error ? error.message : "Gagal memakai foto Google",
+    };
+  }
+
+  revalidateSettings();
+  return { ok: true, error: null };
+}
+
+/** Hapus foto profil custom. */
+export async function removeAvatarAction(
+  _prev: SettingsActionState
+): Promise<SettingsActionState> {
+  const blocked = await requireAccountAccess();
+  if (blocked) return { ok: false, error: blocked };
+
+  try {
+    await removeMyAvatar();
+  } catch (error) {
+    console.error("removeAvatarAction error:", error);
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Gagal menghapus foto",
+    };
+  }
+
+  revalidateSettings();
+  return { ok: true, error: null };
 }

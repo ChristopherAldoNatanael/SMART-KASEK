@@ -2,12 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { useFormState, useFormStatus } from "react-dom";
+import { ArrowLeftRight, LogOut } from "lucide-react";
 import {
   chooseRoleAction,
   createSchoolAction,
   getJoinSchoolInfoAction,
   joinSchoolAction,
+  switchRoleAction,
 } from "@/app/onboarding/actions";
+import { logout } from "@/lib/auth/actions";
 
 const inputClass =
   "w-full rounded-md border bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
@@ -342,5 +345,78 @@ export function JoinSchoolForm() {
       )}
       <SubmitButton label="Gabung ke Sekolah" pendingLabel="Memproses..." />
     </form>
+  );
+}
+
+/**
+ * Koreksi peran saat onboarding (salah pilih Guru / Kepala Sekolah).
+ * Hanya tampil sebelum profil terhubung ke sekolah — setelah itu
+ * RPC menolak (ALREADY_LINKED) demi keamanan otorisasi.
+ */
+export function SwitchRolePanel({
+  currentRole,
+}: {
+  currentRole: "principal" | "teacher";
+}) {
+  const [state, formAction] = useFormState(switchRoleAction, {
+    ok: false,
+    error: null,
+  });
+  const [open, setOpen] = useState(false);
+  const other = currentRole === "principal" ? "teacher" : "principal";
+
+  return (
+    <div className="mt-6 rounded-lg border bg-muted/40 p-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm">
+          <span className="text-muted-foreground">Peran saat ini: </span>
+          <strong>
+            {currentRole === "principal" ? "Kepala Sekolah" : "Guru"}
+          </strong>
+        </p>
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          className="inline-flex min-h-[40px] items-center gap-1.5 rounded-md border bg-card px-3 py-1.5 text-sm font-medium transition-colors hover:bg-muted"
+        >
+          <ArrowLeftRight className="h-4 w-4" aria-hidden />
+          {open ? "Tutup" : "Salah pilih peran?"}
+        </button>
+      </div>
+
+      {open && (
+        <div className="mt-3 space-y-3">
+          <FormError error={state.error} />
+          <form action={formAction}>
+            <button
+              type="submit"
+              name="role"
+              value={other}
+              className="w-full rounded-lg border bg-card p-3 text-left transition-colors hover:border-primary hover:bg-muted/50"
+            >
+              <p className="text-sm font-semibold">
+                Ganti menjadi{" "}
+                {other === "principal" ? "Kepala Sekolah" : "Guru"}
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {other === "principal"
+                  ? "Anda akan membuat sekolah baru dan menerima kode undangan."
+                  : "Anda akan bergabung ke sekolah memakai kode undangan."}
+              </p>
+            </button>
+          </form>
+          <form action={logout}>
+            <button
+              type="submit"
+              className="inline-flex min-h-[40px] items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground hover:underline"
+            >
+              <LogOut className="h-4 w-4" aria-hidden />
+              atau keluar dan daftar ulang dengan email lain
+            </button>
+          </form>
+        </div>
+      )}
+    </div>
   );
 }

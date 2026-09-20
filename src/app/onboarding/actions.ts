@@ -7,6 +7,7 @@ import {
   ensureProfile,
   getJoinSchoolInfo,
   joinSchool,
+  switchProfileRole,
 } from "@/services/school.service";
 import {
   chooseRoleSchema,
@@ -41,6 +42,34 @@ export async function chooseRoleAction(
 
   // Profil baru pasti belum bersekolah → kembali ke onboarding untuk
   // langkah berikutnya (tanpa mampir dashboard agar tak ada kedipan).
+  revalidatePath("/onboarding");
+  redirect("/onboarding");
+}
+
+/**
+ * Koreksi peran saat onboarding (salah pilih Guru/Kepala Sekolah).
+ * Hanya berlaku bila profil belum terhubung ke sekolah — RPC
+ * menolak dengan ALREADY_LINKED bila sudah terhubung.
+ */
+export async function switchRoleAction(
+  _prev: OnboardingActionState,
+  formData: FormData
+): Promise<OnboardingActionState> {
+  const parsed = chooseRoleSchema.safeParse({ role: formData.get("role") });
+  if (!parsed.success) {
+    return { ok: false, error: firstIssueMessage(parsed.error) };
+  }
+
+  try {
+    await switchProfileRole(parsed.data.role);
+  } catch (error) {
+    console.error("switchRoleAction error:", error);
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Gagal mengganti peran",
+    };
+  }
+
   revalidatePath("/onboarding");
   redirect("/onboarding");
 }

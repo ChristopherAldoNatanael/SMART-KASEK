@@ -11,6 +11,7 @@ import {
   AccountEmailForm,
   AccountNameForm,
   AccountPasswordForm,
+  AvatarForm,
 } from "@/components/settings/account-forms";
 import { Badge, Empty, PageHeader, Panel } from "@/components/common";
 
@@ -74,6 +75,14 @@ export default async function SettingsPage() {
         description="Informasi akun Anda saat ini."
       >
         {account ? (
+          <div className="space-y-4">
+            <AvatarForm
+              fullName={account.fullName}
+              avatarUrl={account.avatarUrl}
+              googleAvatarUrl={account.googleAvatarUrl}
+              hasCustomAvatar={account.hasCustomAvatar}
+              loginWith={account.loginWith}
+            />
           <dl className="grid gap-3 rounded-lg border bg-muted/40 p-4 text-sm sm:grid-cols-2">
             <div>
               <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -128,6 +137,7 @@ export default async function SettingsPage() {
               <dd className="mt-0.5 font-semibold">{formatDate(account.joinedAt)}</dd>
             </div>
           </dl>
+          </div>
         ) : (
           <p className="text-sm text-muted-foreground">
             Data akun tidak dapat dimuat. Muat ulang halaman.

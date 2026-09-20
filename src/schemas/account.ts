@@ -27,3 +27,12 @@ export const updateAccountPasswordSchema = z
 export function firstAccountIssueMessage(error: z.ZodError): string {
   return error.issues[0]?.message ?? "Input tidak valid";
 }
+
+/** Foto profil custom: format & ukuran yang diterima. */
+export const ALLOWED_AVATAR_TYPES = [
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+] as const;
+
+export const MAX_AVATAR_BYTES = 2 * 1024 * 1024;

@@ -11,6 +11,7 @@ export type CurrentUser = {
   schoolId: string | null;
   fullName: string;
   isActive: boolean;
+  avatarUrl: string | null;
 };
 
 export async function getCurrentUser(): Promise<CurrentUser | null> {
@@ -30,7 +31,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     // null explicitly (onboarding / login redirect).
     const { data: profile } = await supabase
       .from("profiles")
-      .select("id, full_name, role, school_id, is_active")
+      .select("id, full_name, role, school_id, is_active, avatar_url")
       .eq("auth_user_id", user.id)
       .single();
 
@@ -46,6 +47,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
       schoolId: profile.school_id,
       fullName: profile.full_name,
       isActive: profile.is_active,
+      avatarUrl: (profile.avatar_url as string | null) ?? null,
     };
   } catch (error) {
     console.error("getCurrentUser error:", error);
