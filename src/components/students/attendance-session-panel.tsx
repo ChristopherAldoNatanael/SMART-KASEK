@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { QrCode } from "lucide-react";
 import QRCode from "qrcode";
+import { ATTENDANCE_SHORT, type AttendanceStatus } from "@/lib/students";
+import { cn } from "@/lib/utils";
 import {
   getSessionCheckins,
   getSessionLiveStats,
@@ -117,7 +119,7 @@ export default async function AttendanceSessionPanel({
             </p>
             {checkins.length > 0 && (
               <div>
-                <p className="text-sm font-bold">Sudah absen ({checkins.length})</p>
+                <p className="text-sm font-bold">Tercatat hari ini ({checkins.length})</p>
                 <ol className="mt-2 max-h-56 space-y-1.5 overflow-auto rounded-lg border bg-muted/30 p-2.5">
                   {checkins.map((c, i) => (
                     <li
@@ -130,21 +132,35 @@ export default async function AttendanceSessionPanel({
                       </span>
                       <span className="flex shrink-0 items-center gap-1.5">
                         <span
-                          className={
-                            c.status === "terlambat"
-                              ? "rounded-full bg-orange-100 px-2 py-0.5 text-xs font-bold text-orange-800"
-                              : "rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-bold text-emerald-800"
+                          className={cn(
+                            "rounded-full px-2 py-0.5 text-xs font-bold",
+                            c.status === "hadir" && "bg-emerald-100 text-emerald-800",
+                            c.status === "terlambat" && "bg-orange-100 text-orange-800",
+                            c.status === "izin" && "bg-sky-100 text-sky-800",
+                            c.status === "sakit" && "bg-amber-100 text-amber-800",
+                            c.status === "alpa" && "bg-red-100 text-red-800"
+                          )}
+                        >
+                          {ATTENDANCE_SHORT[c.status as AttendanceStatus] ?? c.status}
+                        </span>
+                        <span
+                          className="tnum text-xs font-bold text-sky-800"
+                          title={
+                            c.method === "qr"
+                              ? "Via scan QR (waktu server)"
+                              : "Input manual guru"
                           }
                         >
-                          {c.status === "terlambat" ? "T" : "H"}
-                        </span>
-                        <span className="tnum text-xs font-bold text-sky-800" title="Jam scan (waktu server)">
                           {c.time ?? "—"}
+                          {c.method === "qr" ? "" : "*"}
                         </span>
                       </span>
                     </li>
                   ))}
                 </ol>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Jam bertanda * = input manual guru.
+                </p>
               </div>
             )}
             <div className="flex flex-wrap gap-2">

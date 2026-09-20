@@ -166,41 +166,69 @@ export async function closeAttendanceSession(sessionId: string): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
+type SessionScope = {
+  school_id: string;
+  class_name: string;
+  academic_year: string;
+  date: string;
+};
+
+async function loadSessionScope(sessionId: string): Promise<SessionScope> {
+  const user = await requireSessionAccess();
+  const supabase = await createClient();
+  const { data: session, error: sError } = await supabase
+    .from("attendance_sessions")
+    .select("id, school_id, class_name, academic_year, date")
+    .eq("id", sessionId)
+    .single();
+  if (sError || !session) throw new Error("Sesi tidak ditemukan");
+  const s = session as SessionScope & { id: string };
+  if (s.school_id !== user.schoolId) throw new Error("Anda tidak memiliki akses ke sesi ini");
+  return s;
+}
+
 export async function getSessionLiveStats(sessionId: string): Promise<{
   total: number;
   hadir: number;
   terlambat: number;
   belum: number;
 }> {
-  const user = await requireSessionAccess();
+  const s = await loadSessionScope(sessionId);
   const supabase = await createClient();
-  const { data: session, error: sError } = await supabase
-    .from("attendance_sessions")
-    .select("id, school_id, class_name, academic_year")
-    .eq("id", sessionId)
-    .single();
-  if (sError || !session) throw new Error("Sesi tidak ditemukan");
-  const s = session as { school_id: string; class_name: string; academic_year: string };
-  if (s.school_id !== user.schoolId) throw new Error("Anda tidak memiliki akses ke sesi ini");
 
-  const [{ count: studentCount }, { data: records, error: rError }] = await Promise.all([
-    supabase
-      .from("students")
-      .select("id", { count: "exact", head: true })
-      .eq("school_id", user.schoolId)
-      .eq("class_name", s.class_name)
-      .eq("academic_year", s.academic_year),
-    supabase
-      .from("class_attendance")
-      .select("status")
-      .eq("session_id", sessionId),
-  ]);
+  // SENGAJA dihitung dari SELURUH absensi tanggal sesi (QR + manual),
+  // bukan hanya baris session_id ini — sesi QR baru tetap membaca data
+  // hari ini. Proteksi duplikat tetap per-sesi (UNIQUE + idempotent).
+  // Cakupan = roster kelas (sama seperti daftar hadir), agar konsisten.
+  const [{ data: roster, error: stError }, { data: records, error: rError }] =
+    await Promise.all([
+      supabase
+        .from("students")
+        .select("id")
+        .eq("school_id", s.school_id)
+        .eq("class_name", s.class_name)
+        .eq("academic_year", s.academic_year),
+      supabase
+        .from("class_attendance")
+        .select("student_id, status")
+        .eq("school_id", s.school_id)
+        .eq("date", s.date),
+    ]);
+  if (stError) throw new Error(stError.message);
   if (rError) throw new Error(rError.message);
-  const rows = (records ?? []) as { status: string }[];
-  const hadir = rows.filter((r) => r.status === "hadir").length;
-  const terlambat = rows.filter((r) => r.status === "terlambat").length;
-  const total = studentCount ?? rows.length;
-  return { total, hadir, terlambat, belum: Math.max(0, total - hadir - terlambat) };
+  const ids = new Set(((roster ?? []) as { id: string }[]).map((r) => r.id));
+  const mine = ((records ?? []) as { student_id: string; status: string }[]).filter(
+    (r) => ids.has(r.student_id)
+  );
+  const hadir = mine.filter((r) => r.status === "hadir").length;
+  const terlambat = mine.filter((r) => r.status === "terlambat").length;
+  const recorded = new Set(mine.map((r) => r.student_id));
+  return {
+    total: ids.size,
+    hadir,
+    terlambat,
+    belum: Math.max(0, ids.size - recorded.size),
+  };
 }
 
 export type SessionCheckin = {
@@ -208,49 +236,53 @@ export type SessionCheckin = {
   status: string;
   /** Jam "HH:mm" WIB (checked_in_at QR, fallback created_at). */
   time: string | null;
+  /** "qr" = via scan, "manual" = input guru. */
+  method: string;
 };
 
-/** Daftar anak yang sudah absen di sesi ini + jamnya (untuk panel guru). */
+/** Daftar anak yang tercatat hari ini + jamnya (untuk panel guru). */
 export async function getSessionCheckins(sessionId: string): Promise<SessionCheckin[]> {
-  const user = await requireSessionAccess();
+  const s = await loadSessionScope(sessionId);
   const supabase = await createClient();
-  const { data: session, error: sError } = await supabase
-    .from("attendance_sessions")
-    .select("id, school_id")
-    .eq("id", sessionId)
-    .single();
-  if (sError || !session) throw new Error("Sesi tidak ditemukan");
-  if ((session as { school_id: string }).school_id !== user.schoolId) {
-    throw new Error("Anda tidak memiliki akses ke sesi ini");
-  }
 
-  const { data: records, error: rError } = await supabase
-    .from("class_attendance")
-    .select("status, checked_in_at, created_at, students(full_name)")
-    .eq("session_id", sessionId)
-    .order("checked_in_at", { ascending: true, nullsFirst: false });
+  const [{ data: roster, error: stError }, { data: records, error: rError }] =
+    await Promise.all([
+      supabase
+        .from("students")
+        .select("id, full_name")
+        .eq("school_id", s.school_id)
+        .eq("class_name", s.class_name)
+        .eq("academic_year", s.academic_year),
+      supabase
+        .from("class_attendance")
+        .select("student_id, status, checked_in_at, created_at, check_in_method")
+        .eq("school_id", s.school_id)
+        .eq("date", s.date),
+    ]);
+  if (stError) throw new Error(stError.message);
   if (rError) throw new Error(rError.message);
-  return ((records ?? []) as {
-    status: string;
-    checked_in_at: string | null;
-    created_at: string;
-    // PostgREST mengembalikan relasi many-to-one sebagai objek tunggal,
-    // tapi tipe supabase-js kadang array — tangani dua-duanya.
-    students:
-      | { full_name: string }
-      | { full_name: string }[]
-      | null;
-  }[]).map((r) => {
-    const s = r.students;
-    const fullName = (
-      Array.isArray(s) ? s[0]?.full_name : s?.full_name
-    )?.trim();
-    return {
-      fullName: fullName || "—",
+  const names = new Map(
+    ((roster ?? []) as { id: string; full_name: string }[]).map((r) => [r.id, r.full_name] as const)
+  );
+  return (
+    (records ?? []) as {
+      student_id: string;
+      status: string;
+      checked_in_at: string | null;
+      created_at: string;
+      check_in_method: string;
+    }[]
+  )
+    .filter((r) => names.has(r.student_id))
+    .map((r) => ({
+      fullName: (names.get(r.student_id) ?? "—").trim() || "—",
       status: r.status,
       time: formatWibHM(r.checked_in_at ?? r.created_at),
-    };
-  });
+      method: r.check_in_method === "qr" ? "qr" : "manual",
+      _at: r.checked_in_at ?? r.created_at,
+    }))
+    .sort((a, b) => (a._at < b._at ? -1 : a._at > b._at ? 1 : 0))
+    .map(({ fullName, status, time, method }) => ({ fullName, status, time, method }));
 }
 
 /* ------------------------- Publik: tanpa login ------------------------- */
