@@ -6,13 +6,37 @@ import { createClient } from "@/lib/supabase/server";
  * Menukar `code` menjadi session, lalu mengarahkan berdasarkan
  * kelengkapan data: belum ada profil/sekolah → /onboarding,
  * sudah lengkap → `next` (default /dashboard).
+ *
+ * Penting untuk production dengan custom domain:
+ * - Jangan percaya buta `new URL(request.url).origin` karena di balik
+ *   proxy Vercel bisa menghasilkan host `*.vercel.app` padahal user
+ *   membuka custom domain. Hormati `x-forwarded-host` dan canonical
+ *   `NEXT_PUBLIC_SITE_URL` bila diset.
  */
+function getBaseUrl(request: Request): string {
+  const canonical = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  if (canonical) return canonical.replace(/\/$/, "");
+
+  const forwardedHost = request.headers.get("x-forwarded-host");
+  if (forwardedHost) {
+    const host = forwardedHost.split(",")[0]?.trim();
+    const proto =
+      request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim() ??
+      "https";
+    if (host) return `${proto}://${host}`;
+  }
+  return new URL(request.url).origin;
+}
+
 export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url);
-  const code = searchParams.get("code");
-  const requested = searchParams.get("next");
+  const url = new URL(request.url);
+  const baseUrl = getBaseUrl(request);
+  const code = url.searchParams.get("code");
+  const requested = url.searchParams.get("next");
   const next =
-    requested && requested.startsWith("/") ? requested : "/dashboard";
+    requested && requested.startsWith("/") && !requested.startsWith("//")
+      ? requested
+      : "/dashboard";
 
   if (code) {
     const supabase = await createClient();
@@ -32,10 +56,12 @@ export async function GET(request: Request) {
       } catch {
         dest = "/onboarding";
       }
-      return NextResponse.redirect(`${origin}${dest}`);
+      return NextResponse.redirect(new URL(dest, baseUrl).toString());
     }
     console.error("OAuth callback error:", error.message);
   }
 
-  return NextResponse.redirect(`${origin}/login?error=oauth`);
+  return NextResponse.redirect(
+    new URL("/login?error=oauth", baseUrl).toString()
+  );
 }

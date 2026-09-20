@@ -59,7 +59,7 @@ export default function RegisterPage() {
           </div>
         ) : (
           <div className="space-y-4 rounded-xl border bg-card p-6 shadow-[0_1px_2px_rgba(16,24,40,0.06)]">
-            <GoogleButton mode="register" />
+            <GoogleButton mode="register" next="/onboarding" />
 
             <div className="flex items-center gap-3 text-xs text-muted-foreground">
               <span className="h-px flex-1 bg-border" />
