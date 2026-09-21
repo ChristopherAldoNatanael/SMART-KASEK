@@ -2,7 +2,9 @@ import Link from "next/link";
 import {
   AlertTriangle,
   ArrowUpRight,
+  GraduationCap,
   LineChart,
+  Plus,
   Sprout,
   TrendingDown,
   TrendingUp,
@@ -10,9 +12,16 @@ import {
 } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth";
 import { getMyGrowthData, getSchoolGrowthOverview } from "@/services/growth.service";
+import {
+  getMyTrainings,
+  getTrainingRecap,
+  listTrainings,
+} from "@/services/training.service";
 import { GrowthChart } from "@/components/charts/growth-chart";
 import { RecalculateGrowthButton } from "@/components/growth/recalculate-button";
+import TrainingDeleteButton from "@/components/growth/training-delete-button";
 import {
+  Badge,
   Empty,
   PageHeader,
   Panel,
@@ -45,6 +54,19 @@ function scoreBg(score: number | null): string {
   if (score >= 70) return "bg-brand";
   if (score >= 60) return "bg-amber-500";
   return "bg-rose-500";
+}
+
+function formatShortDate(value: string): string {
+  return new Date(value).toLocaleDateString("id-ID", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function formatDuration(hours: number | null): string | null {
+  if (hours === null) return null;
+  return `${hours} JP`;
 }
 
 export default async function GrowthPage() {
@@ -115,6 +137,22 @@ export default async function GrowthPage() {
 
   const hasSnapshots = overview.teachers.some((t) => t.latest !== null);
 
+  // Rekap pelatihan: dihitung dari database (COUNT + SUM poin per guru).
+  // Gagal dimuat (mis. migrasi 00039 belum jalan) tidak boleh
+  // meruntuhkan seluruh halaman — tampilkan sebagai peringatan saja.
+  let recap: Awaited<ReturnType<typeof getTrainingRecap>> = [];
+  let trainings: Awaited<ReturnType<typeof listTrainings>> = [];
+  let trainingError: string | null = null;
+  try {
+    [recap, trainings] = await Promise.all([
+      getTrainingRecap(),
+      listTrainings(),
+    ]);
+  } catch (error) {
+    trainingError =
+      error instanceof Error ? error.message : "Gagal memuat data pelatihan";
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -149,6 +187,157 @@ export default async function GrowthPage() {
           tone={overview.attentionCount > 0 ? "danger" : "default"}
         />
       </div>
+
+      {trainingError ? (
+        <div
+          role="alert"
+          className="rounded-xl border border-destructive/20 bg-destructive/5 p-4 text-sm text-destructive"
+        >
+          {trainingError}
+        </div>
+      ) : (
+        <>
+          <Panel
+            title="Rekap Pengembangan Guru"
+            description="Sertifikasi, jumlah pelatihan, dan total poin per guru — dihitung otomatis dari database"
+            action={
+              <Link
+                href="/growth/trainings/new"
+                className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+              >
+                <Plus className="h-3.5 w-3.5" aria-hidden />
+                Tambah Pelatihan
+              </Link>
+            }
+          >
+            <TableShell>
+              <TableHead>
+                <Th>Guru</Th>
+                <Th>Sertifikasi</Th>
+                <Th className="text-right">Pelatihan</Th>
+                <Th className="text-right">Total Poin</Th>
+                <Th className="text-right">Aksi</Th>
+              </TableHead>
+              <tbody>
+                {recap.map((r) => (
+                  <tr
+                    key={r.teacherId}
+                    className="border-b transition-colors last:border-0 hover:bg-muted/40"
+                  >
+                    <td className="px-4 py-3">
+                      <p className="font-medium leading-tight">{r.name}</p>
+                      {r.subject && (
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          {r.subject}
+                        </p>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {r.certificationStatus === "sudah" ? (
+                        <span className="flex flex-col gap-1">
+                          <Badge tone="success">Sudah</Badge>
+                          {r.certificationType && (
+                            <span className="max-w-44 truncate text-xs text-muted-foreground">
+                              {r.certificationType}
+                            </span>
+                          )}
+                        </span>
+                      ) : (
+                        <Badge tone="neutral">Belum</Badge>
+                      )}
+                    </td>
+                    <td className="tnum px-4 py-3 text-right font-semibold">
+                      {r.trainingCount}
+                    </td>
+                    <td className="tnum px-4 py-3 text-right font-semibold">
+                      {r.totalPoints}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <Link
+                        href={`/teachers/${r.teacherId}`}
+                        className="inline-flex items-center gap-1 text-sm font-medium text-brand hover:underline"
+                      >
+                        Detail
+                        <ArrowUpRight className="h-3.5 w-3.5" aria-hidden />
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </TableShell>
+          </Panel>
+
+          <Panel
+            title="Kegiatan Pelatihan"
+            description={
+              trainings.length > 0
+                ? `${trainings.length} kegiatan tercatat — poin dibagikan otomatis ke setiap peserta`
+                : undefined
+            }
+          >
+            {trainings.length === 0 ? (
+              <div className="flex flex-col items-start gap-3 rounded-lg border border-dashed p-5">
+                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
+                  <GraduationCap className="h-5 w-5 text-muted-foreground" aria-hidden />
+                </span>
+                <div>
+                  <p className="font-semibold">Belum ada kegiatan pelatihan</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Tambahkan kegiatan pertama: isi jadwal dan poin sekali,
+                    lalu pilih guru pesertanya.
+                  </p>
+                </div>
+                <Link
+                  href="/growth/trainings/new"
+                  className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+                >
+                  <Plus className="h-3.5 w-3.5" aria-hidden />
+                  Tambah Pelatihan
+                </Link>
+              </div>
+            ) : (
+              <ul className="divide-y">
+                {trainings.map((t) => (
+                  <li
+                    key={t.id}
+                    className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium">{t.name}</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {[
+                          t.training_date ? formatShortDate(t.training_date) : null,
+                          t.organizer,
+                          t.schedule_time,
+                          formatDuration(t.duration_hours),
+                          `${t.participantCount} peserta`,
+                        ]
+                          .filter(Boolean)
+                          .join(" • ")}
+                      </p>
+                      {t.participants.length > 0 && (
+                        <p className="mt-1 max-w-xl truncate text-xs text-muted-foreground">
+                          {t.participants.map((p) => p.teacherName).join(", ")}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex shrink-0 items-center gap-3">
+                      <Badge tone="brand">{t.points} poin</Badge>
+                      <Link
+                        href={`/growth/trainings/${t.id}/edit`}
+                        className="text-sm font-medium text-brand hover:underline"
+                      >
+                        Ubah
+                      </Link>
+                      <TrainingDeleteButton trainingId={t.id} trainingName={t.name} />
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Panel>
+        </>
+      )}
 
       {!hasSnapshots ? (
         <Empty
@@ -295,6 +484,9 @@ export default async function GrowthPage() {
  */
 async function TeacherGrowthView() {
   let mine: Awaited<ReturnType<typeof getMyGrowthData>>;
+  // Riwayat milik sendiri; tabel belum ada (migrasi 00039) → kosong saja,
+  // jangan meruntuhkan tampilan skor.
+  const myTrainings = await getMyTrainings().catch(() => []);
   try {
     mine = await getMyGrowthData();
   } catch (error) {
@@ -448,6 +640,47 @@ async function TeacherGrowthView() {
             classroom: s.classroom_score,
           }))}
         />
+      </Panel>
+
+      <Panel
+        title="Riwayat Pelatihan Saya"
+        description={
+          myTrainings.length > 0
+            ? `${myTrainings.length} pelatihan • ${myTrainings.reduce((sum, t) => sum + (t.points ?? 0), 0)} total poin — dicatat Kepala Sekolah`
+            : undefined
+        }
+      >
+        {myTrainings.length > 0 ? (
+          <ul className="divide-y">
+            {myTrainings.map((t) => (
+              <li
+                key={t.trainingId}
+                className="flex items-start justify-between gap-4 py-3 first:pt-0 last:pb-0"
+              >
+                <div className="min-w-0">
+                  <p className="font-medium">{t.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {[
+                      t.trainingDate ? formatShortDate(t.trainingDate) : null,
+                      t.organizer,
+                      t.scheduleTime,
+                      formatDuration(t.durationHours),
+                    ]
+                      .filter(Boolean)
+                      .join(" • ") || "—"}
+                  </p>
+                </div>
+                <span className="tnum shrink-0 text-lg font-bold">
+                  {t.points}
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            Belum ada pelatihan yang tercatat untuk Anda.
+          </p>
+        )}
       </Panel>
     </div>
   );

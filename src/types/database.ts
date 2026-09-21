@@ -162,6 +162,9 @@ export interface Database {
           education_level: string | null;
           employment_status: string;
           joined_at: string | null;
+          certification_status: string;
+          certification_type: string | null;
+          certification_year: number | null;
           created_at: string;
           updated_at: string;
         };
@@ -177,6 +180,9 @@ export interface Database {
           education_level?: string | null;
           employment_status?: string;
           joined_at?: string | null;
+          certification_status?: string;
+          certification_type?: string | null;
+          certification_year?: number | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -192,6 +198,9 @@ export interface Database {
           education_level?: string | null;
           employment_status?: string;
           joined_at?: string | null;
+          certification_status?: string;
+          certification_type?: string | null;
+          certification_year?: number | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -642,6 +651,73 @@ export interface Database {
           notes?: string | null;
           created_at?: string;
           updated_at?: string;
+        };
+      };
+      trainings: {
+        Row: {
+          id: string;
+          school_id: string;
+          name: string;
+          description: string | null;
+          organizer: string | null;
+          training_date: string | null;
+          schedule_time: string | null;
+          location: string | null;
+          duration_hours: number | null;
+          points: number;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          school_id: string;
+          name: string;
+          description?: string | null;
+          organizer?: string | null;
+          training_date?: string | null;
+          schedule_time?: string | null;
+          location?: string | null;
+          duration_hours?: number | null;
+          points?: number;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          school_id?: string;
+          name?: string;
+          description?: string | null;
+          organizer?: string | null;
+          training_date?: string | null;
+          schedule_time?: string | null;
+          location?: string | null;
+          duration_hours?: number | null;
+          points?: number;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      training_participants: {
+        Row: {
+          id: string;
+          training_id: string;
+          teacher_id: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          training_id: string;
+          teacher_id: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          training_id?: string;
+          teacher_id?: string;
+          created_at?: string;
         };
       };
       teacher_growth_snapshots: {

@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
+import { hasRole } from "@/lib/permissions";
 import type { Database } from "@/types/database";
 
 type Teacher = Database["public"]["Tables"]["teachers"]["Row"];
@@ -215,6 +216,61 @@ export async function updateTeacher(
     if (profileError) {
       throw new Error(`Gagal update profil: ${profileError.message}`);
     }
+  }
+
+  return data;
+}
+
+/**
+ * Update data sertifikasi guru — KHUSUS Kepala Sekolah.
+ * Sertifikasi adalah data profil (bukan pelatihan), diisi manual.
+ * Status "belum" selalu mengosongkan jenis & tahun agar konsisten.
+ * Dijaga ganda: cek role di sini + trigger guard_teacher_certification
+ * di database (migrasi 00039).
+ */
+export async function updateTeacherCertification(
+  id: string,
+  input: {
+    status: "belum" | "sudah";
+    type?: string | null;
+    year?: number | null;
+  }
+): Promise<Teacher> {
+  const user = await getCurrentUser();
+  if (!user?.schoolId) throw new Error("No school access");
+  if (!hasRole(user.role, "principal")) {
+    throw new Error("Hanya Kepala Sekolah yang dapat mengubah data sertifikasi");
+  }
+
+  const teacher = await getTeacherById(id);
+  if (!teacher) {
+    throw new Error("Guru tidak ditemukan");
+  }
+
+  const updateData: TeacherUpdate =
+    input.status === "sudah"
+      ? {
+          certification_status: "sudah",
+          certification_type: input.type?.trim() || null,
+          certification_year: input.year ?? null,
+        }
+      : {
+          certification_status: "belum",
+          certification_type: null,
+          certification_year: null,
+        };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("teachers")
+    .update(updateData)
+    .eq("id", id)
+    .eq("school_id", user.schoolId)
+    .select()
+    .single();
+
+  if (error) {
+    throw new Error(error.message);
   }
 
   return data;

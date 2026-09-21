@@ -13,6 +13,7 @@ import {
   getLatestGrowthSnapshot,
   calculateGrowthPercentage,
 } from "@/services/growth.service";
+import { getTeacherTrainings } from "@/services/training.service";
 import { getTeacherSupervisions } from "@/services/supervision.service";
 import { getTeacherCoachingSessions } from "@/services/coaching.service";
 import { Badge, PageHeader, Panel } from "@/components/common";
@@ -20,6 +21,7 @@ import CompetencyForm, {
   TeacherProfileForm,
   TeachingForm,
 } from "@/components/teachers/competency-form";
+import CertificationForm from "@/components/teachers/certification-form";
 
 const SUPERVISION_STATUS_LABELS: Record<string, string> = {
   draft: "Draft",
@@ -80,6 +82,7 @@ export default async function TeacherDetailPage({
     masterCompetencies,
     supervisions,
     coachingSessions,
+    trainingData,
   ] = await Promise.all([
     getTeacherCompetencySummary(id).catch(() => []),
     getLatestGrowthSnapshot(id).catch(() => null),
@@ -88,6 +91,8 @@ export default async function TeacherDetailPage({
     getCompetencies().catch(() => []),
     getTeacherSupervisions(id).catch(() => []),
     getTeacherCoachingSessions(id).catch(() => []),
+    // null untuk non-Kepala Sekolah (service menolak) → panel disembunyikan.
+    getTeacherTrainings(id).catch(() => null),
   ]);
 
   const classOptions = await getActiveSchoolClassNames().catch(
@@ -213,6 +218,52 @@ export default async function TeacherDetailPage({
               <dt className="text-xs text-muted-foreground">Wali Kelas</dt>
               <dd className="mt-0.5 font-medium">
                 {teacher.homeroom_class ?? "—"}
+              </dd>
+            </div>
+          </dl>
+        )}
+      </Panel>
+
+      <Panel
+        title="Sertifikasi"
+        description="Status sertifikasi guru — dikelola Kepala Sekolah"
+        action={
+          <Badge
+            tone={teacher.certification_status === "sudah" ? "success" : "neutral"}
+          >
+            {teacher.certification_status === "sudah"
+              ? "Sudah Sertifikasi"
+              : "Belum Sertifikasi"}
+          </Badge>
+        }
+      >
+        {canScore ? (
+          <CertificationForm
+            teacherId={id}
+            status={teacher.certification_status ?? "belum"}
+            type={teacher.certification_type}
+            year={teacher.certification_year}
+          />
+        ) : (
+          <dl className="grid gap-3 text-sm sm:grid-cols-3">
+            <div>
+              <dt className="text-xs text-muted-foreground">Status</dt>
+              <dd className="mt-0.5 font-medium">
+                {teacher.certification_status === "sudah"
+                  ? "Sudah Sertifikasi"
+                  : "Belum Sertifikasi"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted-foreground">Jenis Sertifikasi</dt>
+              <dd className="mt-0.5 font-medium">
+                {teacher.certification_type ?? "—"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted-foreground">Tahun Sertifikasi</dt>
+              <dd className="tnum mt-0.5 font-medium">
+                {teacher.certification_year ?? "—"}
               </dd>
             </div>
           </dl>
@@ -437,6 +488,59 @@ export default async function TeacherDetailPage({
           </p>
         )}
       </Panel>
+
+      {trainingData && (
+        <Panel
+          title="Pengembangan Kompetensi — Pelatihan"
+          description={
+            trainingData.recap.trainingCount > 0
+              ? `${trainingData.recap.trainingCount} pelatihan • ${trainingData.recap.totalPoints} total poin — tercatat otomatis dari kegiatan yang diikuti`
+              : undefined
+          }
+          action={
+            trainingData.recap.trainingCount > 0 ? (
+              <Badge tone="brand">
+                {trainingData.recap.totalPoints} poin
+              </Badge>
+            ) : undefined
+          }
+        >
+          {trainingData.history.length > 0 ? (
+            <ul className="divide-y">
+              {trainingData.history.map((t) => (
+                <li
+                  key={t.trainingId}
+                  className="flex items-start justify-between gap-4 py-3 first:pt-0 last:pb-0"
+                >
+                  <div className="min-w-0">
+                    <p className="font-medium">{t.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {[
+                        t.trainingDate ? formatShortDate(t.trainingDate) : null,
+                        t.organizer,
+                        t.scheduleTime,
+                        t.durationHours !== null
+                          ? `${t.durationHours} JP`
+                          : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" • ") || "—"}
+                    </p>
+                  </div>
+                  <span className="tnum shrink-0 text-lg font-bold">
+                    {t.points}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Belum ada pelatihan yang diikuti guru ini. Kegiatan baru
+              ditambahkan Kepala Sekolah dari halaman Teacher Growth.
+            </p>
+          )}
+        </Panel>
+      )}
     </div>
   );
 }

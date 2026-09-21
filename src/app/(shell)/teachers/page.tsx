@@ -43,6 +43,7 @@ export default async function TeachersPage() {
             <Th>Nama</Th>
             <Th>Mata Pelajaran</Th>
             <Th>Wali Kelas</Th>
+            <Th>Sertifikasi</Th>
             {canManage && <Th>NIP</Th>}
             <Th>Status</Th>
             <Th className="text-right">Aksi</Th>
@@ -72,6 +73,17 @@ export default async function TeachersPage() {
                   ) : (
                     <span className="text-sm text-muted-foreground">—</span>
                   )}
+                </td>
+                <td className="px-4 py-3">
+                  <Badge
+                    tone={
+                      teacher.certification_status === "sudah"
+                        ? "success"
+                        : "neutral"
+                    }
+                  >
+                    {teacher.certification_status === "sudah" ? "Sudah" : "Belum"}
+                  </Badge>
                 </td>
                 {canManage && (
                   <td className="tnum px-4 py-3 text-muted-foreground">

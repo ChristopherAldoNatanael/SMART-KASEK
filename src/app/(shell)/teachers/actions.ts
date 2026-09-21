@@ -19,7 +19,11 @@ import {
   updateProfileSchema,
   updateTeachingSchema,
 } from "@/schemas/teacher";
-import { deleteTeacher, getOwnTeacherId, setTeacherActive, updateTeacher } from "@/services/teacher.service";
+import {
+  firstIssueMessage as trainingIssueMessage,
+  updateCertificationSchema,
+} from "@/schemas/training";
+import { deleteTeacher, getOwnTeacherId, setTeacherActive, updateTeacher, updateTeacherCertification } from "@/services/teacher.service";
 
 export type TeacherActionState = {
   ok: boolean;
@@ -225,6 +229,63 @@ export async function updateProfileAction(
 
   revalidatePath(`/teachers/${parsed.data.teacherId}`);
   revalidatePath("/teachers");
+  return { ok: true, error: null };
+}
+
+/**
+ * Update status sertifikasi guru (principal only).
+ * Jenis sertifikasi diketik manual — sistem tidak menentukan otomatis.
+ */
+export async function updateCertificationAction(
+  _prev: TeacherActionState,
+  formData: FormData
+): Promise<TeacherActionState> {
+  const user = await requireUser();
+  if (!user.schoolId) {
+    return { ok: false, error: "Akun Anda belum terhubung ke sekolah." };
+  }
+  if (!hasRole(user.role, "principal")) {
+    return { ok: false, error: "Hanya Kepala Sekolah yang dapat mengubah data sertifikasi." };
+  }
+
+  const parsed = updateCertificationSchema.safeParse({
+    teacherId: formData.get("teacherId"),
+    status: formData.get("status"),
+    type: formData.get("type"),
+    year: formData.get("year"),
+  });
+  if (!parsed.success) {
+    return { ok: false, error: trainingIssueMessage(parsed.error) };
+  }
+
+  try {
+    await updateTeacherCertification(parsed.data.teacherId, {
+      status: parsed.data.status,
+      type: parsed.data.type,
+      year: parsed.data.year,
+    });
+
+    await logAuditEvent({
+      action: "update",
+      entity: "teachers",
+      entityId: parsed.data.teacherId,
+      newData: {
+        certification_status: parsed.data.status,
+        certification_type: parsed.data.type ?? null,
+        certification_year: parsed.data.year ?? null,
+      },
+    });
+  } catch (error) {
+    console.error("updateCertificationAction error:", error);
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Gagal menyimpan",
+    };
+  }
+
+  revalidatePath(`/teachers/${parsed.data.teacherId}`);
+  revalidatePath("/teachers");
+  revalidatePath("/growth");
   return { ok: true, error: null };
 }
 
