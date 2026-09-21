@@ -1,9 +1,8 @@
 "use client";
 
 import { useFormState, useFormStatus } from "react-dom";
-import { scheduleSupervisionAction } from "@/app/(shell)/supervision/actions";
-
-export type TeacherOption = { id: string; name: string };
+import { updateSupervisionScheduleAction } from "@/app/(shell)/supervision/actions";
+import type { TeacherOption } from "./supervision-form";
 
 const inputClass =
   "w-full rounded-md border bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
@@ -16,35 +15,40 @@ function SubmitButton() {
       disabled={pending}
       className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground ring-offset-background transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
     >
-      {pending ? "Menjadwalkan..." : "Jadwalkan Supervisi"}
+      {pending ? "Menyimpan..." : "Simpan Perubahan"}
     </button>
   );
 }
 
+export type SupervisionScheduleInitial = {
+  teacherId: string;
+  supervisionDate: string;
+  type: string | null;
+  academicYear: string | null;
+};
+
 /**
- * Form penjadwalan: siapa + kapan + tipe + tahun pelajaran.
- * Selalu tersimpan sebagai draft tanpa nilai. Guru melengkapi
- * 12 dokumen di halaman detail, baru Kepala Sekolah mengisi
- * penilaian di sana.
+ * Form ubah jadwal supervisi: field sama seperti form penjadwalan
+ * (guru + tanggal + tahun pelajaran + tipe), terisi awal dari data
+ * tersimpan. Dokumen, penilaian, dan status tidak ikut berubah.
  */
-export default function SupervisionForm({
+export default function SupervisionScheduleEditForm({
+  supervisionId,
   teachers,
-  defaultDate,
-  defaultTeacherId,
-  defaultAcademicYear,
+  initial,
 }: {
+  supervisionId: string;
   teachers: TeacherOption[];
-  defaultDate: string;
-  defaultTeacherId?: string;
-  defaultAcademicYear?: string;
+  initial: SupervisionScheduleInitial;
 }) {
-  const [state, formAction] = useFormState(scheduleSupervisionAction, {
+  const [state, formAction] = useFormState(updateSupervisionScheduleAction, {
     ok: false,
     error: null,
   });
 
   return (
     <form action={formAction} className="space-y-6">
+      <input type="hidden" name="supervisionId" value={supervisionId} />
       {state.error && (
         <div
           role="alert"
@@ -56,14 +60,14 @@ export default function SupervisionForm({
 
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
-          <label htmlFor="teacherId" className="text-sm font-medium">
+          <label htmlFor="edit-teacherId" className="text-sm font-medium">
             Guru yang disupervisi <span className="text-destructive">*</span>
           </label>
           <select
-            id="teacherId"
+            id="edit-teacherId"
             name="teacherId"
             required
-            defaultValue={defaultTeacherId ?? ""}
+            defaultValue={initial.teacherId}
             className={inputClass}
           >
             <option value="">Pilih guru</option>
@@ -76,29 +80,29 @@ export default function SupervisionForm({
         </div>
 
         <div className="space-y-2">
-          <label htmlFor="supervisionDate" className="text-sm font-medium">
+          <label htmlFor="edit-supervisionDate" className="text-sm font-medium">
             Tanggal Supervisi <span className="text-destructive">*</span>
           </label>
           <input
-            id="supervisionDate"
+            id="edit-supervisionDate"
             name="supervisionDate"
             type="date"
             required
-            defaultValue={defaultDate}
+            defaultValue={initial.supervisionDate}
             className={inputClass}
           />
         </div>
 
         <div className="space-y-2">
-          <label htmlFor="academicYear" className="text-sm font-medium">
+          <label htmlFor="edit-academicYear" className="text-sm font-medium">
             Tahun Pelajaran
           </label>
           <input
-            id="academicYear"
+            id="edit-academicYear"
             name="academicYear"
             type="text"
             maxLength={20}
-            defaultValue={defaultAcademicYear ?? ""}
+            defaultValue={initial.academicYear ?? ""}
             placeholder="mis. 2026/2027"
             pattern="\d{4}/\d{4}"
             title="Format YYYY/YYYY, mis. 2026/2027. Kosongkan untuk mengikuti tanggal supervisi."
@@ -109,15 +113,16 @@ export default function SupervisionForm({
           </p>
         </div>
 
-        <div className="space-y-2 md:col-span-2">
-          <label htmlFor="type" className="text-sm font-medium">
+        <div className="space-y-2">
+          <label htmlFor="edit-type" className="text-sm font-medium">
             Tipe Supervisi
           </label>
           <input
-            id="type"
+            id="edit-type"
             name="type"
             type="text"
             maxLength={100}
+            defaultValue={initial.type ?? ""}
             placeholder="mis. Supervisi kelas"
             className={inputClass}
           />
@@ -125,12 +130,10 @@ export default function SupervisionForm({
       </div>
 
       <div className="rounded-lg border bg-muted/40 p-4 text-sm text-muted-foreground">
-        <p className="font-medium text-foreground">Alur selanjutnya:</p>
-        <ol className="mt-1.5 list-decimal space-y-1 pl-5">
-          <li>Guru melengkapi 12 dokumen perangkat di halaman detail.</li>
-          <li>Anda mengisi penilaian (indikator 0–100) di halaman detail.</li>
-          <li>Ubah status menjadi Selesai, lalu buat Coaching.</li>
-        </ol>
+        <p>
+          Dokumen yang sudah diunggah guru, penilaian instrumen, dan status
+          supervisi tidak berubah — hanya data jadwal di atas yang diperbarui.
+        </p>
       </div>
 
       <div className="flex gap-2">

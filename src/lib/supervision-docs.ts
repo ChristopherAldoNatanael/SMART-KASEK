@@ -51,3 +51,6 @@ export const SUPERVISION_DOC_MIMES = [
 ] as const;
 
 export const SUPERVISION_DOC_MAX_BYTES = 10 * 1024 * 1024;
+
+/** Batas jumlah berkas per jenis dokumen per supervisi (anti-abuse Storage). */
+export const SUPERVISION_DOC_MAX_FILES_PER_TYPE = 10;

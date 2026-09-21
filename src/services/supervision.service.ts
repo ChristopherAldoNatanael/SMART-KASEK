@@ -152,12 +152,27 @@ export async function getTeacherSupervisions(
 }
 
 /**
+ * Tahun ajaran dari tanggal supervisi (Juli–Juni),
+ * mis. 2026-09-01 → "2026/2027". Dipakai sebagai fallback
+ * bila form tidak mengisi tahun pelajaran.
+ */
+function academicYearFromDate(dateISO: string): string | null {
+  const m = dateISO.match(/^(\d{4})-(\d{2})-\d{2}$/);
+  if (!m) return null;
+  const y = Number(m[1]);
+  const month = Number(m[2]);
+  if (!Number.isFinite(y) || !Number.isFinite(month)) return null;
+  return month >= 7 ? `${y}/${y + 1}` : `${y - 1}/${y}`;
+}
+
+/**
  * Create a new supervision.
  */
 export async function createSupervision(input: {
   teacherId: string;
   supervisionDate: string;
   type?: string;
+  academicYear?: string;
   summary?: string;
   strengths?: string;
   improvements?: string;
@@ -207,6 +222,8 @@ export async function createSupervision(input: {
     supervisor_id: user.id,
     supervision_date: input.supervisionDate,
     type: input.type || null,
+    academic_year:
+      input.academicYear?.trim() || academicYearFromDate(input.supervisionDate),
     overall_score: overallScore,
     summary: input.summary || null,
     strengths: input.strengths || null,
@@ -253,8 +270,10 @@ export async function createSupervision(input: {
 export async function updateSupervision(
   id: string,
   input: {
+    teacherId?: string;
     supervisionDate?: string;
-    type?: string;
+    type?: string | null;
+    academicYear?: string;
     overallScore?: number;
     summary?: string;
     strengths?: string;
@@ -273,9 +292,31 @@ export async function updateSupervision(
   }
 
   const updateData: SupervisionUpdate = {};
+  if (input.teacherId !== undefined) {
+    // Ganti guru: pastikan guru baru satu sekolah (isolasi sekolah).
+    const { data: teacher } = await supabase
+      .from("teachers")
+      .select("id")
+      .eq("id", input.teacherId)
+      .eq("school_id", user.schoolId)
+      .single();
+    if (!teacher) throw new Error("Guru tidak ditemukan");
+    updateData.teacher_id = input.teacherId;
+  }
   if (input.supervisionDate !== undefined)
     updateData.supervision_date = input.supervisionDate;
-  if (input.type !== undefined) updateData.type = input.type;
+  if (input.type !== undefined) updateData.type = input.type || null;
+  if (input.academicYear !== undefined) {
+    // String kosong dari form = ikuti tanggal baru (atau tanggal lama
+    // bila tanggal tidak ikut diubah).
+    const trimmed = input.academicYear.trim();
+    updateData.academic_year =
+      trimmed ||
+      academicYearFromDate(input.supervisionDate ?? supervision.supervision_date);
+  } else if (input.supervisionDate !== undefined) {
+    // Tanggal berubah tapi tahun tidak disentuh → tahun tidak diubah
+    // agar pilihan manual Kepala Sekolah tidak tertimpa diam-diam.
+  }
   if (input.overallScore !== undefined)
     updateData.overall_score = input.overallScore;
   if (input.summary !== undefined) updateData.summary = input.summary;

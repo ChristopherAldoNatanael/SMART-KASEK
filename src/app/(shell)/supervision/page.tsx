@@ -144,6 +144,7 @@ export default async function SupervisionPage({
           <TableHead>
             <Th>Guru</Th>
             <Th>Tanggal</Th>
+            <Th>Tahun Pelajaran</Th>
             <Th>Tipe</Th>
             <Th className="text-right">Nilai</Th>
             <Th>Status</Th>
@@ -164,6 +165,9 @@ export default async function SupervisionPage({
                     { day: "numeric", month: "short", year: "numeric" }
                   )}
                 </td>
+                <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
+                  {supervision.academic_year ?? "—"}
+                </td>
                 <td className="px-4 py-3 text-muted-foreground">
                   {supervision.type ?? "—"}
                 </td>
@@ -176,12 +180,22 @@ export default async function SupervisionPage({
                   </Badge>
                 </td>
                 <td className="px-4 py-3 text-right">
-                  <Link
-                    href={`/supervision/${supervision.id}`}
-                    className="font-medium text-brand hover:underline"
-                  >
-                    Detail
-                  </Link>
+                  <span className="inline-flex items-center justify-end gap-3">
+                    {isLeader && (
+                      <Link
+                        href={`/supervision/${supervision.id}/edit`}
+                        className="font-medium text-brand hover:underline"
+                      >
+                        Ubah Jadwal
+                      </Link>
+                    )}
+                    <Link
+                      href={`/supervision/${supervision.id}`}
+                      className="font-medium text-brand hover:underline"
+                    >
+                      Detail
+                    </Link>
+                  </span>
                 </td>
               </tr>
             ))}

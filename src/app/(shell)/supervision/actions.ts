@@ -24,6 +24,7 @@ import {
 import {
   firstIssueMessage,
   scheduleSupervisionSchema,
+  updateSupervisionScheduleSchema,
   updateSupervisionStatusSchema,
 } from "@/schemas/supervision";
 
@@ -57,9 +58,10 @@ async function requireSupervisionMutation(): Promise<
 }
 
 /**
- * Menjadwalkan supervisi (Kepala Sekolah): cukup guru + tanggal + tipe.
- * Selalu tersimpan sebagai draft tanpa nilai. Guru kemudian melengkapi
- * 12 dokumen di halaman detail, baru Kepala Sekolah menilai di sana.
+ * Menjadwalkan supervisi (Kepala Sekolah): guru + tanggal + tipe
+ * + tahun pelajaran. Selalu tersimpan sebagai draft tanpa nilai.
+ * Guru kemudian melengkapi 12 dokumen di halaman detail, baru
+ * Kepala Sekolah menilai di sana.
  */
 export async function scheduleSupervisionAction(
   _prev: SupervisionActionState,
@@ -72,6 +74,7 @@ export async function scheduleSupervisionAction(
     teacherId: formData.get("teacherId"),
     supervisionDate: formData.get("supervisionDate"),
     type: formData.get("type"),
+    academicYear: formData.get("academicYear"),
   });
 
   if (!parsed.success) {
@@ -84,6 +87,7 @@ export async function scheduleSupervisionAction(
       teacherId: parsed.data.teacherId,
       supervisionDate: parsed.data.supervisionDate,
       type: parsed.data.type,
+      academicYear: parsed.data.academicYear,
       status: "draft",
     });
 
@@ -94,6 +98,7 @@ export async function scheduleSupervisionAction(
       newData: {
         teacher_id: supervision.teacher_id,
         status: supervision.status,
+        academic_year: supervision.academic_year,
       },
     });
     supervisionId = supervision.id;
@@ -106,6 +111,71 @@ export async function scheduleSupervisionAction(
 
   revalidatePath("/supervision");
   redirect(`/supervision/${supervisionId}`);
+}
+
+/**
+ * Mengubah jadwal supervisi (Kepala Sekolah): guru + tanggal + tipe
+ * + tahun pelajaran. Field teks yang dikosongkan berarti hapus isi
+ * (tipe) atau ikuti tanggal baru (tahun pelajaran).
+ */
+export async function updateSupervisionScheduleAction(
+  _prev: SupervisionActionState,
+  formData: FormData
+): Promise<SupervisionActionState> {
+  const gate = await requireSupervisionMutation();
+  if (!gate.user) return fail(gate.error);
+
+  const parsed = updateSupervisionScheduleSchema.safeParse({
+    supervisionId: formData.get("supervisionId"),
+    teacherId: formData.get("teacherId"),
+    supervisionDate: formData.get("supervisionDate"),
+    type: formData.get("type"),
+    academicYear: formData.get("academicYear"),
+  });
+
+  if (!parsed.success) {
+    return fail(firstIssueMessage(parsed.error));
+  }
+
+  // Skema mengubah string kosong menjadi undefined; di sini undefined
+  // punya arti eksplisit: tipe → hapus isi, tahun → ikuti tanggal baru.
+  const rawType = formData.get("type");
+  const rawYear = formData.get("academicYear");
+
+  try {
+    const supervision = await updateSupervision(parsed.data.supervisionId, {
+      teacherId: parsed.data.teacherId,
+      supervisionDate: parsed.data.supervisionDate,
+      type:
+        typeof rawType === "string" && rawType.trim() === ""
+          ? null
+          : parsed.data.type,
+      academicYear:
+        typeof rawYear === "string" && rawYear.trim() === ""
+          ? ""
+          : parsed.data.academicYear,
+    });
+
+    await logAuditEvent({
+      action: "update",
+      entity: "supervisions",
+      entityId: supervision.id,
+      newData: {
+        teacher_id: supervision.teacher_id,
+        supervision_date: supervision.supervision_date,
+        type: supervision.type,
+        academic_year: supervision.academic_year,
+      },
+    });
+  } catch (error) {
+    console.error("updateSupervisionScheduleAction error:", error);
+    return fail(
+      error instanceof Error ? error.message : "Gagal menyimpan perubahan jadwal"
+    );
+  }
+
+  revalidatePath("/supervision");
+  redirect(`/supervision/${parsed.data.supervisionId}`);
 }
 
 /**

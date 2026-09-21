@@ -5,6 +5,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { getOwnTeacherId } from "./teacher.service";
 import {
   SUPERVISION_DOC_MAX_BYTES,
+  SUPERVISION_DOC_MAX_FILES_PER_TYPE,
   SUPERVISION_DOC_MIMES,
   type SupervisionDocType,
 } from "@/lib/supervision-docs";
@@ -93,7 +94,7 @@ async function resolveSupervisionScope(supervisionId: string): Promise<{
 
 /**
  * Daftar dokumen: 1 query ringan (metadata saja, tanpa byte file).
- * Signed URL dibuat per baris (maks 12) dengan TTL pendek.
+ * Multi-file per doc_type didukung; signed URL per baris (TTL pendek).
  */
 export async function getSupervisionDocuments(
   supervisionId: string
@@ -105,7 +106,8 @@ export async function getSupervisionDocuments(
     .from("supervision_documents")
     .select("id, supervision_id, doc_type, file_path, original_name, mime_type, file_size, created_at")
     .eq("supervision_id", scope.supervisionId)
-    .order("doc_type");
+    .order("doc_type")
+    .order("created_at", { ascending: true });
   if (error) throw new Error(error.message);
   return Promise.all(
     (data ?? []).map(async (d) => ({
@@ -119,8 +121,9 @@ export async function getSupervisionDocuments(
 
 /**
  * Catat metadata setelah browser mengunggah langsung ke Storage.
- * Pola upsert per doc_type: 1 jenis = 1 file (hemat DB, cegah duplikat).
- * Berkas lama di Storage dihapus (best effort) agar tidak orphan.
+ * Multi-file: tiap unggahan = 1 baris baru per doc_type (maks
+ * SUPERVISION_DOC_MAX_FILES_PER_TYPE per jenis per supervisi).
+ * Hapus per-berkas via deleteSupervisionDocument.
  */
 export async function saveSupervisionDocument(input: {
   supervisionId: string;
@@ -154,30 +157,15 @@ export async function saveSupervisionDocument(input: {
     .single();
   if (!supervision) throw new Error("Supervisi tidak ditemukan");
 
-  const { data: existing } = await supabase
+  const { count } = await supabase
     .from("supervision_documents")
-    .select("id, file_path")
+    .select("id", { count: "exact", head: true })
     .eq("supervision_id", input.supervisionId)
-    .eq("doc_type", input.docType)
-    .maybeSingle();
-
-  if (existing) {
-    const { data, error } = await supabase
-      .from("supervision_documents")
-      .update({
-        file_path: input.filePath,
-        original_name: input.originalName.slice(0, 255),
-        mime_type: input.mimeType,
-        file_size: Math.floor(input.fileSize),
-      })
-      .eq("id", existing.id)
-      .select()
-      .single();
-    if (error) throw new Error(error.message);
-    if (existing.file_path !== input.filePath) {
-      await supabase.storage.from("supervision-docs").remove([existing.file_path]);
-    }
-    return data;
+    .eq("doc_type", input.docType);
+  if ((count ?? 0) >= SUPERVISION_DOC_MAX_FILES_PER_TYPE) {
+    throw new Error(
+      `Maksimal ${SUPERVISION_DOC_MAX_FILES_PER_TYPE} berkas per jenis dokumen`
+    );
   }
 
   const { data, error } = await supabase

@@ -135,8 +135,12 @@ export default function SupervisionInstrumentForm({
   });
 
   const docsByType = useMemo(() => {
-    const map = new Map<string, InstrumentDocInfo>();
-    for (const d of docs) map.set(d.doc_type, d);
+    const map = new Map<string, InstrumentDocInfo[]>();
+    for (const d of docs) {
+      const list = map.get(d.doc_type);
+      if (list) list.push(d);
+      else map.set(d.doc_type, [d]);
+    }
     return map;
   }, [docs]);
 
@@ -242,7 +246,8 @@ export default function SupervisionInstrumentForm({
       <ol className="grid gap-3 lg:grid-cols-2">
         {INSTRUMENT_ASPECTS.map((aspect, index) => {
           const state = aspects[aspect.docType];
-          const doc = docsByType.get(aspect.docType);
+          const docsForAspect = docsByType.get(aspect.docType) ?? [];
+          const docCount = docsForAspect.length;
           return (
             <li
               key={aspect.docType}
@@ -258,10 +263,10 @@ export default function SupervisionInstrumentForm({
                   </span>
                   {aspect.label}
                 </p>
-                {doc ? (
+                {docCount > 0 ? (
                   <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-800 ring-1 ring-inset ring-emerald-600/20">
                     <FileCheck2 className="h-3 w-3" aria-hidden />
-                    Dokumen ada
+                    {docCount > 1 ? `${docCount} dokumen` : "Dokumen ada"}
                   </span>
                 ) : (
                   <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground ring-1 ring-inset ring-border">
@@ -271,18 +276,26 @@ export default function SupervisionInstrumentForm({
                 )}
               </div>
 
-              {doc?.downloadUrl && (
-                <a
-                  href={doc.downloadUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-1.5 inline-flex w-fit items-center gap-1 text-xs font-medium text-brand hover:underline"
-                >
-                  <Download className="h-3 w-3" aria-hidden />
-                  <span className="max-w-56 truncate" title={doc.original_name}>
-                    {doc.original_name}
-                  </span>
-                </a>
+              {docCount > 0 && (
+                <ul className="mt-1.5 space-y-1">
+                  {docsForAspect.map((d) =>
+                    d.downloadUrl ? (
+                      <li key={`${d.doc_type}-${d.original_name}-${d.downloadUrl}`}>
+                        <a
+                          href={d.downloadUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex w-fit max-w-full items-center gap-1 text-xs font-medium text-brand hover:underline"
+                        >
+                          <Download className="h-3 w-3 shrink-0" aria-hidden />
+                          <span className="max-w-56 truncate" title={d.original_name}>
+                            {d.original_name}
+                          </span>
+                        </a>
+                      </li>
+                    ) : null
+                  )}
+                </ul>
               )}
 
               <div className="mt-3 flex flex-wrap items-center gap-2">

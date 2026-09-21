@@ -67,7 +67,8 @@ export default async function SupervisionDetailPage({
     (isLeader || user.role === "teacher");
   const viewerRole =
     user?.role === "teacher" ? "teacher" : isLeader ? user?.role ?? "principal" : "principal";
-  const docsComplete = documents.length >= 12;
+  const coveredTypes = new Set(documents.map((d) => d.doc_type)).size;
+  const docsComplete = coveredTypes >= 12;
   const supervised =
     supervision.status === "completed" ||
     supervision.status === "follow_up" ||
@@ -91,12 +92,20 @@ export default async function SupervisionDetailPage({
       <PageHeader
         eyebrow={`Supervisi • ${date}`}
         title={supervision.teacher?.profile?.full_name ?? "Tanpa nama"}
-        description={`Tipe: ${supervision.type ?? "—"} • Supervisor: ${supervision.supervisor?.full_name ?? "—"}`}
+        description={`Tipe: ${supervision.type ?? "—"} • Tahun Pelajaran: ${supervision.academic_year ?? "—"} • Supervisor: ${supervision.supervisor?.full_name ?? "—"}`}
         actions={
           <div className="flex items-center gap-3">
             <Badge tone={STATUS_TONES[supervision.status] ?? "neutral"}>
               {STATUS_LABELS[supervision.status] ?? supervision.status}
             </Badge>
+            {isLeader && (
+              <Link
+                href={`/supervision/${supervision.id}/edit`}
+                className="rounded-md border px-3 py-1.5 text-sm font-medium transition-colors hover:bg-muted"
+              >
+                Ubah Jadwal
+              </Link>
+            )}
             {isLeader && (
               <Link
                 href={`/coaching/new?teacherId=${supervision.teacher_id}&supervisionId=${supervision.id}`}
@@ -123,7 +132,11 @@ export default async function SupervisionDetailPage({
           <Badge tone={docsComplete ? "success" : "info"}>1</Badge>
           <div>
             <p className="font-semibold">
-              Guru mengunggah dokumen ({documents.length}/12)
+              Guru mengunggah dokumen ({coveredTypes}/12 jenis
+              {documents.length !== coveredTypes
+                ? ` • ${documents.length} berkas`
+                : ""}
+              )
             </p>
             <p className="mt-0.5 text-xs text-muted-foreground">
               {docsComplete
@@ -230,8 +243,8 @@ export default async function SupervisionDetailPage({
         title="Dokumen Perangkat Pembelajaran"
         description={
           user?.role === "teacher"
-            ? "Unggah 12 perangkat Anda di sini (CP s.d. Jadwal Pelajaran). Format utama Word (.docx), PDF didukung."
-            : "Dokumen yang diunggah guru (CP s.d. Jadwal Pelajaran). Periksa sebelum menilai. Format utama Word (.docx), PDF didukung."
+            ? "Unggah 12 perangkat Anda di sini (CP s.d. Jadwal Pelajaran). Tiap jenis boleh lebih dari 1 berkas. Format utama Word (.docx), PDF didukung."
+            : "Dokumen yang diunggah guru (CP s.d. Jadwal Pelajaran). Tiap jenis dapat berisi lebih dari 1 berkas. Periksa sebelum menilai. Format utama Word (.docx), PDF didukung."
         }
       >
         {user?.schoolId ? (
