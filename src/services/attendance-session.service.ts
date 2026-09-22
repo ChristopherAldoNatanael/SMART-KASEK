@@ -4,7 +4,7 @@ import { randomBytes } from "crypto";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getCurrentUser } from "@/lib/auth";
-import { allowedClassesFor, formatWibHM, todayISO } from "@/lib/students";
+import { allowedClassesFor, formatWibHM, todayISO, todayWIB } from "@/lib/students";
 import { getTeacherClassAccess } from "./teaching-assignment.service";
 import type { Database } from "@/types/database";
 
@@ -54,10 +54,41 @@ function toJakartaTimestamptz(date: string, time: string): string {
   return `${date}T${time}:00+07:00`;
 }
 
-function isExpired(session: Pick<Session, "status" | "ends_at">, now: Date): boolean {
+function isExpired(
+  session: Pick<Session, "status" | "ends_at" | "date">,
+  now: Date
+): boolean {
   if (session.status !== "open") return true;
   if (session.ends_at && new Date(session.ends_at).getTime() <= now.getTime()) return true;
+  // Aturan anti-lupa: sesi hanya berlaku di tanggalnya (WIB). Begitu
+  // kalender berganti hari, QR kemarin otomatis tidak berlaku — guru
+  // tidak wajib menekan "Tutup sesi" tiap hari.
+  if (session.date < todayWIB(now)) return true;
   return false;
+}
+
+/**
+ * Tutup diam-diam sesi yang tanggalnya sudah lewat (WIB) agar tidak
+ * menggantung berstatus "open" selamanya. Best-effort: kegagalan
+ * TIDAK boleh menggagalkan alur utama (baca/konfirmasi absensi).
+ */
+async function closeStaleSessions(
+  client: Awaited<ReturnType<typeof createClient>> | ReturnType<typeof serviceClient>,
+  schoolId: string,
+  className?: string
+): Promise<void> {
+  try {
+    let query = client
+      .from("attendance_sessions")
+      .update({ status: "closed" })
+      .eq("school_id", schoolId)
+      .eq("status", "open")
+      .lt("date", todayWIB());
+    if (className) query = query.eq("class_name", className);
+    await query;
+  } catch (error) {
+    console.error("closeStaleSessions error:", error);
+  }
 }
 
 /* ------------------------- Guru: kelola sesi ------------------------- */
@@ -94,6 +125,9 @@ export async function createAttendanceSession(input: {
   }
 
   const supabase = await createClient();
+  // Bereskan dulu sesi basi kelas ini (kemarin yang lupa ditutup),
+  // agar tidak menumpuk berstatus "open" selamanya.
+  await closeStaleSessions(supabase, schoolId, className);
   // MVP 1 sesi terbuka per kelas per tanggal — cegah QR ganda membingungkan.
   const { data: existing } = await supabase
     .from("attendance_sessions")
@@ -135,6 +169,9 @@ export async function listSessionsForClass(input: {
 }): Promise<Session[]> {
   const user = await requireSessionAccess();
   const supabase = await createClient();
+  // Sesi basi (tanggal lewat, lupa ditutup) langsung ditutup di DB
+  // agar panel guru tidak lagi menawarkannya sebagai sesi terbuka.
+  await closeStaleSessions(supabase, user.schoolId, input.className.trim());
   const { data, error } = await supabase
     .from("attendance_sessions")
     .select("*")
@@ -145,7 +182,10 @@ export async function listSessionsForClass(input: {
     .order("created_at", { ascending: false })
     .limit(10);
   if (error) throw new Error(error.message);
-  return (data ?? []) as Session[];
+  const today = todayWIB();
+  return ((data ?? []) as Session[]).map((s) =>
+    s.status === "open" && s.date < today ? { ...s, status: "closed" } : s
+  );
 }
 
 export async function closeAttendanceSession(sessionId: string): Promise<void> {
@@ -320,9 +360,30 @@ async function loadSessionByToken(token: string): Promise<Session> {
   return data as Session;
 }
 
+/** Tutup satu sesi yang tanggalnya sudah lewat (best-effort, tak pernah throw). */
+async function closeIfStale(
+  client: ReturnType<typeof serviceClient>,
+  session: Session
+): Promise<void> {
+  if (session.status !== "open" || session.date >= todayWIB()) return;
+  try {
+    await client
+      .from("attendance_sessions")
+      .update({ status: "closed" })
+      .eq("id", session.id);
+  } catch (error) {
+    console.error("closeIfStale error:", error);
+  }
+}
+
 export async function getPublicSessionByToken(token: string): Promise<PublicSessionInfo> {
   const session = await loadSessionByToken(token);
   const now = new Date();
+  // Scan QR basi (kemarin yang lupa ditutup) langsung ditutup di DB
+  // saat pertama kali dibuka — QR-nya mati mulai detik itu juga.
+  if (session.status === "open" && session.date < todayWIB(now)) {
+    await closeIfStale(serviceClient(), session);
+  }
   const open = !isExpired(session, now);
   return {
     className: session.class_name,
@@ -347,7 +408,11 @@ export async function searchStudentsForSession(input: {
   query: string;
 }): Promise<QrNameMatch[]> {
   const session = await loadSessionByToken(input.token);
-  if (isExpired(session, new Date())) return [];
+  if (isExpired(session, new Date())) {
+    const service = serviceClient();
+    await closeIfStale(service, session);
+    return [];
+  }
   const q = input.query.trim().replace(/\s+/g, " ");
   if (q.length < 2 || q.length > 50) return [];
   // Netralkan wildcard LIKE agar query tidak bisa melebar.
@@ -383,6 +448,7 @@ export async function previewStudentForSession(input: {
   const session = await loadSessionByToken(input.token);
   const now = new Date();
   if (isExpired(session, now)) {
+    await closeIfStale(serviceClient(), session);
     throw new Error("Sesi absensi sudah ditutup atau kedaluwarsa. Silakan hubungi guru jika ada kesalahan.");
   }
 
@@ -445,6 +511,7 @@ export async function confirmAttendanceForSession(input: {
   // Server time = satu-satunya sumber waktu.
   const now = new Date();
   if (isExpired(session, now)) {
+    await closeIfStale(serviceClient(), session);
     throw new Error("Sesi absensi sudah ditutup atau kedaluwarsa. Silakan hubungi guru jika ada kesalahan.");
   }
   const service = serviceClient();

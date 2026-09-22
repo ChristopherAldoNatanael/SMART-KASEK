@@ -68,7 +68,7 @@ export default async function AttendanceSessionPanel({
       description={
         open
           ? `Sesi "${open.label}" terbuka. Siswa scan QR → ketuk nama → konfirmasi. Satu HP boleh bergantian, tiap siswa 1 absensi, siswa berikutnya scan ulang.`
-          : "Belum ada sesi QR terbuka hari ini. Buka sesi agar siswa bisa absen lewat scan tanpa login."
+          : "Belum ada sesi QR terbuka hari ini. Buka sesi agar siswa bisa absen lewat scan tanpa login. Sesi kemarin otomatis ditutup tiap tengah malam (WIB), jadi QR lama tidak bisa dipakai lagi."
       }
     >
       <SessionAutoRefresh enabled={open !== null} />

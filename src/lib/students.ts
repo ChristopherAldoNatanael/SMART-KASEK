@@ -100,6 +100,20 @@ export function todayISO(now: Date = new Date()): string {
   return `${y}-${m}-${d}`;
 }
 
+/**
+ * Tanggal hari ini dalam WIB (Asia/Jakarta) format YYYY-MM-DD.
+ * Dipakai sebagai sumber kebenaran untuk kedaluwarsa sesi QR —
+ * server (UTC) dan browser bisa beda zona waktu, sekolah patokannya WIB.
+ */
+export function todayWIB(now: Date = new Date()): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Jakarta",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now);
+}
+
 /** Bulan berjalan format YYYY-MM (default filter rekap). */
 export function currentMonthISO(now: Date = new Date()): string {
   const y = now.getFullYear();

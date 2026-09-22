@@ -5,6 +5,20 @@ import PublicAttendanceFlow from "./flow";
 
 export const dynamic = "force-dynamic";
 
+// "2026-09-21" → "21 September 2026". Parse manual (tanpa Date)
+// agar tidak geser hari karena zona waktu.
+function formatTanggalID(date: string): string {
+  const parts = date.split("-").map(Number);
+  if (parts.length !== 3 || parts.some((n) => !Number.isFinite(n))) return date;
+  const [y, m, d] = parts as [number, number, number];
+  const bulan = [
+    "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+    "Juli", "Agustus", "September", "Oktober", "November", "Desember",
+  ];
+  if (m < 1 || m > 12) return date;
+  return `${d} ${bulan[m - 1]} ${y}`;
+}
+
 // Sesi absensi tidak boleh terindeks mesin pencari — hanya lewat QR guru.
 export const metadata: Metadata = {
   robots: { index: false, follow: false },
@@ -42,8 +56,10 @@ export default async function PublicAttendancePage({
           <QrCode className="mx-auto h-10 w-10 text-muted-foreground" aria-hidden />
           <h1 className="text-lg font-bold">Sesi Absensi Sudah Ditutup</h1>
           <p className="text-sm text-muted-foreground">
-            Sesi {session.label} Kelas {session.className} sudah ditutup atau kedaluwarsa. Silakan hubungi guru
-            jika ada kesalahan.
+            Sesi {session.label} Kelas {session.className} tanggal{" "}
+            {formatTanggalID(session.date)} sudah ditutup atau kedaluwarsa.
+            Sesi kemarin otomatis ditutup tiap tengah malam — silakan scan QR
+            hari ini yang ditampilkan guru.
           </p>
         </div>
       ) : (
