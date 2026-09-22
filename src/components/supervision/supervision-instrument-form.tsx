@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useFormState, useFormStatus } from "react-dom";
 import { Download, FileCheck2, FileX2 } from "lucide-react";
+import DocumentPreviewButton from "@/components/supervision/document-preview";
 import {
   finalizeInstrumentAction,
   saveInstrumentDraftAction,
@@ -24,6 +25,7 @@ export type InstrumentDocInfo = {
   doc_type: string;
   original_name: string;
   downloadUrl: string | null;
+  mime_type?: string | null;
 };
 
 export type InstrumentInitialItem = {
@@ -280,12 +282,19 @@ export default function SupervisionInstrumentForm({
                 <ul className="mt-1.5 space-y-1">
                   {docsForAspect.map((d) =>
                     d.downloadUrl ? (
-                      <li key={`${d.doc_type}-${d.original_name}-${d.downloadUrl}`}>
+                      <li
+                        key={`${d.doc_type}-${d.original_name}-${d.downloadUrl}`}
+                        className="flex flex-wrap items-center gap-1.5"
+                      >
+                        <DocumentPreviewButton
+                          fileName={d.original_name}
+                          mimeType={d.mime_type ?? ""}
+                          url={d.downloadUrl}
+                        />
                         <a
                           href={d.downloadUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex w-fit max-w-full items-center gap-1 text-xs font-medium text-brand hover:underline"
+                          download={d.original_name}
+                          className="inline-flex w-fit max-w-full items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:underline"
                         >
                           <Download className="h-3 w-3 shrink-0" aria-hidden />
                           <span className="max-w-56 truncate" title={d.original_name}>

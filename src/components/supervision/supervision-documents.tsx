@@ -23,6 +23,7 @@ import {
   type SupervisionDocType,
 } from "@/lib/supervision-docs";
 import type { SupervisionDocumentWithUrl } from "@/services/supervision-documents.service";
+import DocumentPreviewButton from "@/components/supervision/document-preview";
 import { Badge } from "@/components/common";
 import { cn } from "@/lib/utils";
 
@@ -292,10 +293,16 @@ export default function SupervisionDocuments({
                         </p>
                         <div className="mt-2 flex flex-wrap items-center gap-1.5">
                           {doc.downloadUrl && (
+                            <DocumentPreviewButton
+                              fileName={doc.original_name}
+                              mimeType={doc.mime_type}
+                              url={doc.downloadUrl}
+                            />
+                          )}
+                          {doc.downloadUrl && (
                             <a
                               href={doc.downloadUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
+                              download={doc.original_name}
                               className="inline-flex items-center gap-1 rounded-md border bg-background px-2 py-1 text-[11px] font-medium transition-colors hover:bg-muted"
                             >
                               <Download className="h-3 w-3" aria-hidden />

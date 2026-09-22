@@ -331,6 +331,7 @@ export default async function SupervisionDetailPage({
                 doc_type: d.doc_type,
                 original_name: d.original_name,
                 downloadUrl: d.downloadUrl,
+                mime_type: d.mime_type,
               }))}
             />
           </div>
