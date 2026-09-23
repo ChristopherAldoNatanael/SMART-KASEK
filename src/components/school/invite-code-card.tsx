@@ -1,21 +1,51 @@
 "use client";
 
-import { useState } from "react";
-import { Check, Copy, KeyRound } from "lucide-react";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { Check, Copy, KeyRound, RefreshCw } from "lucide-react";
+import { regenerateInviteCodeAction } from "@/app/(shell)/dashboard/invite-actions";
+import { toast } from "@/components/toaster";
 
 export default function InviteCodeCard({ code }: { code: string | null }) {
   const [copied, setCopied] = useState(false);
+  const [regenPending, startRegen] = useTransition();
+  const router = useRouter();
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timer.current) clearTimeout(timer.current);
+    };
+  }, []);
 
   async function handleCopy() {
     if (!code) return;
     try {
       await navigator.clipboard.writeText(code);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = setTimeout(() => setCopied(false), 2000);
     } catch {
       // Clipboard API tidak tersedia (mis. HTTP non-lokal) —
       // pengguna tetap bisa menyalin manual dari teks.
     }
+  }
+
+  function handleRegenerate() {
+    if (regenPending) return;
+    const sure = window.confirm(
+      "Buat kode undangan baru? Kode lama langsung tidak berlaku. Guru yang sudah bergabung tidak terpengaruh."
+    );
+    if (!sure) return;
+    startRegen(async () => {
+      const res = await regenerateInviteCodeAction();
+      if (!res.ok) {
+        toast.error("Belum berhasil", res.error ?? "Gagal membuat kode baru");
+        return;
+      }
+      toast.success("Kode baru aktif", res.message ?? undefined);
+      router.refresh();
+    });
   }
 
   return (
@@ -51,6 +81,23 @@ export default function InviteCodeCard({ code }: { code: string | null }) {
               )}
               {copied ? "Tersalin" : "Salin"}
             </button>
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handleRegenerate}
+              disabled={regenPending}
+              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-md border px-3 py-2 text-xs font-semibold text-muted-foreground transition-colors hover:border-destructive/50 hover:text-destructive disabled:pointer-events-none disabled:opacity-60"
+            >
+              <RefreshCw
+                className={`h-3.5 w-3.5 ${regenPending ? "animate-spin" : ""}`}
+                aria-hidden
+              />
+              {regenPending ? "Membuat kode baru..." : "Buat kode baru"}
+            </button>
+            <p className="text-xs text-muted-foreground">
+              Bila kode bocor, buat baru — kode lama langsung mati.
+            </p>
           </div>
         </>
       ) : (

@@ -91,6 +91,28 @@ async function closeStaleSessions(
   }
 }
 
+/* ------------------------- Cron: sapu bersih global ------------------------- */
+
+/**
+ * Tutup SEMUA sesi basi lintas sekolah (date < hari ini WIB).
+ * Dipakai endpoint cron 00:05 WIB — cadangan dari lazy-close per request.
+ * Service-role: tidak ada user, hanya dipanggil route cron yang sudah
+ * memverifikasi CRON_SECRET. Mengembalikan jumlah yang ditutup.
+ * Idempotent: aman dijalankan ulang, rekap tidak tersentuh.
+ */
+export async function closeAllStaleSessions(): Promise<{ closed: number; date: string }> {
+  const today = todayWIB();
+  const service = serviceClient();
+  const { data, error } = await service
+    .from("attendance_sessions")
+    .update({ status: "closed" })
+    .eq("status", "open")
+    .lt("date", today)
+    .select("id");
+  if (error) throw new Error(error.message);
+  return { closed: (data ?? []).length, date: today };
+}
+
 /* ------------------------- Guru: kelola sesi ------------------------- */
 
 export async function createAttendanceSession(input: {

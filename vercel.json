@@ -1,0 +1,9 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": [
+    {
+      "path": "/api/cron/close-stale-sessions?secret=e03a1c0ab47e3f967faf551334cd4cbc27473a17735f9a6a66acaaa5cb3ab5e6",
+      "schedule": "5 17 * * *"
+    }
+  ]
+}

@@ -118,8 +118,7 @@ export async function getMySchool(): Promise<School | null> {
 }
 
 /** School's invite code — visible to the principal of that school. */
-export async function getMySchoolInviteCode(): Promise<string | null> {
-  try {
+export async function getMySchoolInviteCode(): Promise<string | null> {  try {
     const { profile, error } = await getOwnProfile();
     if (error || !profile?.school_id) return null;
     if (profile.role !== "principal" && profile.role !== "admin") return null;
@@ -137,6 +136,26 @@ export async function getMySchoolInviteCode(): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+/**
+ * Buat kode undangan baru untuk sekolah sendiri (principal/admin).
+ * Kode lama langsung tidak berlaku; guru yang sudah bergabung tidak
+ * terpengaruh. Butuh migrasi 00043 (regenerate_invite_code).
+ */
+export async function regenerateInviteCode(): Promise<string> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("regenerate_invite_code");
+  if (error) {
+    const raw = error.message ?? "";
+    if (raw.includes("FORBIDDEN_NOT_PRINCIPAL")) {
+      throw new Error("Hanya Kepala Sekolah yang dapat mengganti kode undangan.");
+    }
+    throw new Error(rpcErrorMessage(error));
+  }
+  const code = String(data ?? "").trim();
+  if (!code) throw new Error("Gagal membuat kode baru. Coba lagi.");
+  return code;
 }
 
 export async function ensureProfile(
