@@ -4,7 +4,7 @@ import { randomBytes } from "crypto";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getCurrentUser } from "@/lib/auth";
-import { allowedClassesFor, formatWibHM, todayISO, todayWIB } from "@/lib/students";
+import { allowedClassesFor, formatWibHM, todayWIB } from "@/lib/students";
 import { getTeacherClassAccess } from "./teaching-assignment.service";
 import type { Database } from "@/types/database";
 
@@ -106,7 +106,16 @@ export async function createAttendanceSession(input: {
   const className = input.className.trim();
   if (!className) throw new Error("Kelas tidak valid");
   if (!DATE_RE.test(input.date)) throw new Error("Tanggal tidak valid");
-  if (input.date > todayISO()) throw new Error("Tanggal sesi tidak boleh hari esok");
+  // QR bersifat realtime harian (WIB): sesi hanya boleh dibuka untuk
+  // HARI INI. Mencegah bug "buka sesi kemarin lalu QR langsung mati"
+  // karena closeStaleSessions menutup sesi tanggal lewat.
+  const today = todayWIB();
+  if (input.date > today) throw new Error("Tanggal sesi tidak boleh hari esok");
+  if (input.date < today) {
+    throw new Error(
+      "Tanggal masih kemarin. Ketuk tombol “Hari ini” dulu agar tanggal jadi hari ini (WIB), baru buka sesi QR."
+    );
+  }
   if (input.lateAfter && !TIME_RE.test(input.lateAfter)) throw new Error("Batas harus HH:mm");
   if (input.endsAt && !TIME_RE.test(input.endsAt)) throw new Error("Berakhir harus HH:mm");
   if (input.lateAfter && input.endsAt && input.endsAt <= input.lateAfter) {

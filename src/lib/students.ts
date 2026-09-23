@@ -121,6 +121,11 @@ export function currentMonthISO(now: Date = new Date()): string {
   return `${y}-${m}`;
 }
 
+/** Bulan berjalan dalam WIB (Asia/Jakarta) format YYYY-MM. */
+export function currentMonthWIB(now: Date = new Date()): string {
+  return todayWIB(now).slice(0, 7);
+}
+
 /**
  * Tahun ajaran untuk suatu bulan ("2027-01" → "2026/2027").
  * Dipakai agar rekap Januari tetap masuk tahun ajaran berjalan.
@@ -180,6 +185,18 @@ export function monthLabelID(month: string): string {
 export function currentAcademicYear(now: Date = new Date()): string {
   const y = now.getFullYear();
   const m = now.getMonth() + 1;
+  return m >= 7 ? `${y}/${y + 1}` : `${y - 1}/${y}`;
+}
+
+/**
+ * Tahun ajaran berjalan dalam WIB (Asia/Jakarta).
+ * Dipakai halaman absensi agar server UTC (Vercel) tidak salah hari
+ * pada jam 00:00–07:00 WIB. Sekolah patokannya WIB.
+ */
+export function currentAcademicYearWIB(now: Date = new Date()): string {
+  const wib = todayWIB(now);
+  const y = Number(wib.slice(0, 4));
+  const m = Number(wib.slice(5, 7));
   return m >= 7 ? `${y}/${y + 1}` : `${y - 1}/${y}`;
 }
 

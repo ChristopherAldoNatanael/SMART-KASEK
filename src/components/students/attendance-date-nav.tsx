@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { todayISO } from "@/lib/students";
+import { todayISO, todayWIB } from "@/lib/students";
 
 function shift(dateISO: string, days: number): string {
   const d = new Date(`${dateISO}T00:00:00`);
@@ -23,7 +23,9 @@ export default function AttendanceDateNav({
   current: string;
 }) {
   const router = useRouter();
-  const today = todayISO();
+  // Patokan hari = WIB (Asia/Jakarta), bukan timezone HP/server.
+  // HP guru yang timezone-nya salah tetap dapat batas yang benar.
+  const today = todayWIB();
 
   function go(date: string) {
     const params = new URLSearchParams();

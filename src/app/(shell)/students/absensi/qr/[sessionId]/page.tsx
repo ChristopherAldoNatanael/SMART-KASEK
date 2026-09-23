@@ -26,13 +26,14 @@ export default async function SessionQrPage({
   const supabase = await createClient();
   const { data } = await supabase
     .from("attendance_sessions")
-    .select("id, school_id, class_name, label, date, status, qr_token, late_after, ends_at")
+    .select("id, school_id, class_name, academic_year, label, date, status, qr_token, late_after, ends_at")
     .eq("id", sessionId)
     .single();
   const session = data as {
     id: string;
     school_id: string;
     class_name: string;
+    academic_year: string;
     label: string;
     date: string;
     status: string;
@@ -57,11 +58,11 @@ export default async function SessionQrPage({
     <div className="mx-auto max-w-2xl space-y-6 p-6 text-center">
       <SessionAutoRefresh enabled={session.status === "open"} />
       <Link
-        href="/students/absensi"
+        href={`/students/absensi?tahun=${encodeURIComponent(session.academic_year)}&kelas=${encodeURIComponent(session.class_name)}&tanggal=${encodeURIComponent(session.date)}`}
         className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
       >
         <ArrowLeft className="h-3.5 w-3.5" aria-hidden />
-        Kembali
+        Kembali ke absensi {session.class_name}
       </Link>
       <div className="rounded-3xl border bg-white p-8 shadow-sm">
         <p className="text-lg font-bold tracking-wide text-slate-900">ABSENSI {session.class_name}</p>

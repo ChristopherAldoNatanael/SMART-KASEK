@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ArrowLeft, ClipboardCheck, ShieldAlert, Users } from "lucide-react";
 import { getAttendanceSheet } from "@/services/student-attendance.service";
 import { getTeacherClassAccess } from "@/services/teaching-assignment.service";
-import { allowedClassesFor, currentAcademicYear, todayISO } from "@/lib/students";
+import { allowedClassesFor, currentAcademicYearWIB, todayWIB } from "@/lib/students";
 import { Empty, PageHeader, Panel } from "@/components/common";
 import AttendanceDateNav from "@/components/students/attendance-date-nav";
 import { ExportDailyExcelButton } from "@/components/students/attendance-export";
@@ -19,10 +19,13 @@ export default async function AttendancePage({
   searchParams?: Promise<{ tahun?: string; kelas?: string; tanggal?: string }>;
 }) {
   const query = (await searchParams) ?? {};
-  const academicYear = query.tahun?.trim() || currentAcademicYear();
+  // Semua tanggal dipatok WIB (Asia/Jakarta) agar konsisten antara
+  // server UTC (Vercel), browser guru, dan kedaluwarsa QR.
+  const today = todayWIB();
+  const academicYear = query.tahun?.trim() || currentAcademicYearWIB();
   const className = query.kelas?.trim() || "";
-  const rawDate = query.tanggal?.trim() || todayISO();
-  const date = DATE_RE.test(rawDate) && rawDate <= todayISO() ? rawDate : todayISO();
+  const rawDate = query.tanggal?.trim() || today;
+  const date = DATE_RE.test(rawDate) && rawDate <= today ? rawDate : today;
 
   if (!className) {
     return (

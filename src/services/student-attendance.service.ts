@@ -4,9 +4,11 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import {
   currentAcademicYear,
+  currentMonthWIB,
   formatWibHM,
   monthRange,
   schoolYearForMonth,
+  todayWIB,
   type AttendanceStatus,
 } from "@/lib/students";
 import type { Database } from "@/types/database";
@@ -40,9 +42,9 @@ async function requireAttendanceAccess(): Promise<{ schoolId: string; profileId:
 
 function assertValidDate(date: string): void {
   if (!DATE_RE.test(date)) throw new Error("Tanggal tidak valid");
-  const today = new Date();
-  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-  if (date > todayStr) throw new Error("Tanggal absensi tidak boleh hari esok");
+  // Patokan WIB agar server UTC tidak menolak tanggal hari ini
+  // pada jam 00:00–07:00 WIB.
+  if (date > todayWIB()) throw new Error("Tanggal absensi tidak boleh hari esok");
 }
 
 /**
@@ -227,7 +229,7 @@ export async function getMonthlyRecap(input: {
   const { schoolId } = await requireAttendanceAccess();
   const cleanMonth = /^\d{4}-\d{2}$/.test(input.month.trim())
     ? input.month.trim()
-    : `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
+    : currentMonthWIB();
   const { from, to } = monthRange(cleanMonth);
   const schoolYear = schoolYearForMonth(cleanMonth);
   const wanted = input.className?.trim() || null;

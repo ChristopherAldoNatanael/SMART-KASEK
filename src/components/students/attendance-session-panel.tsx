@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { QrCode } from "lucide-react";
 import QRCode from "qrcode";
-import { ATTENDANCE_SHORT, type AttendanceStatus } from "@/lib/students";
+import { ATTENDANCE_SHORT, todayWIB, type AttendanceStatus } from "@/lib/students";
 import { cn } from "@/lib/utils";
 import {
   getSessionCheckins,
@@ -67,8 +67,10 @@ export default async function AttendanceSessionPanel({
       title="QR Absensi Digital"
       description={
         open
-          ? `Sesi "${open.label}" terbuka. Siswa scan QR → ketuk nama → konfirmasi. Satu HP boleh bergantian, tiap siswa 1 absensi, siswa berikutnya scan ulang.`
-          : "Belum ada sesi QR terbuka hari ini. Buka sesi agar siswa bisa absen lewat scan tanpa login. Sesi kemarin otomatis ditutup tiap tengah malam (WIB), jadi QR lama tidak bisa dipakai lagi."
+          ? `Sesi "${open.label}" terbuka (WIB). Siswa scan QR → ketuk nama → konfirmasi. Satu HP boleh bergantian, tiap siswa 1 absensi, siswa berikutnya scan ulang. Data masuk realtime tiap ±10 detik.`
+          : date < todayWIB()
+            ? "Tanggal masih kemarin (WIB). Ketuk tombol “Hari ini” di atas dulu agar tanggal jadi hari ini, baru buka sesi QR. Sesi QR hanya untuk hari ini."
+            : "Belum ada sesi QR terbuka hari ini (WIB). Buka sesi agar siswa bisa absen lewat scan tanpa login. Sesi kemarin otomatis ditutup tiap tengah malam WIB, jadi QR lama tidak bisa dipakai lagi."
       }
     >
       <SessionAutoRefresh enabled={open !== null} />
@@ -114,8 +116,8 @@ export default async function AttendanceSessionPanel({
               </div>
             )}
             <p className="text-sm text-muted-foreground">
-              Waktu kehadiran dicatat dari server. Lewat batas = Terlambat otomatis. Data langsung masuk daftar
-              hadir dan rekap di bawah.
+              Waktu kehadiran dicatat dari server (WIB, Asia/Jakarta). Lewat batas = Terlambat otomatis. Data
+              langsung masuk daftar hadir dan rekap di bawah (refresh otomatis ±10 detik).
             </p>
             {checkins.length > 0 && (
               <div>
